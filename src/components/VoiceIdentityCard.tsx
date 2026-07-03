@@ -19,7 +19,6 @@ import {
   Radio
 } from 'lucide-react';
 import { playChime, speakText, cancelSpeech } from '../utils/audio';
-import logoUrl from '../assets/images/logo.png';
 
 interface VoiceIdentityCardProps {
   onVerificationSuccess: (active: boolean) => void;

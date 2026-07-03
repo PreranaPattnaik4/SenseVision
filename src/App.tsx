@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import logoImage from './assets/images/logo.png';
+const logoImage = "https://www.dropbox.com/scl/fi/4pluub1fokqdrf3ovrvdf/a1ffdb5f-507f-4469-b502-50f48b90fe24.png?rlkey=cwo5zpluoadchv9hp4h0amjhr&st=wx16wfee&raw=1";
 import { 
   Camera, 
   Sparkles, 
