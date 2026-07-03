@@ -1,0 +1,11 @@
+{
+  "name": "SenseVision",
+  "description": "AI-powered assistive technology platform designed to help visually impaired and physically challenged individuals understand and navigate their environments through real-time audio guidance.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
