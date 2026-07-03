@@ -15,6 +15,7 @@ interface GlobalVoiceTriggerProps {
   isAnalyzing: boolean;
   isSpeaking: boolean;
   onMuteSpeech: () => void;
+  onLockSession?: (type?: 'normal' | 'disconnect') => void;
 }
 
 export default function GlobalVoiceTrigger({
@@ -28,7 +29,8 @@ export default function GlobalVoiceTrigger({
   onTabChange,
   isAnalyzing,
   isSpeaking,
-  onMuteSpeech
+  onMuteSpeech,
+  onLockSession
 }: GlobalVoiceTriggerProps) {
   const [isListening, setIsListening] = useState(false);
   const [recognition, setRecognition] = useState<any | null>(null);
@@ -107,6 +109,16 @@ export default function GlobalVoiceTrigger({
       setCommandFeedback("Opening voice help instructions.");
       speakText("Voice guide. You can say navigation, read text, describe surroundings, or ask direct questions.", false);
       setShowHelpModal(true);
+      return;
+    }
+
+    // Session Locking commands
+    if (text === "lock sensevision" || text === "goodbye" || text === "end session" || text === "exit" || text === "end conversation") {
+      playChime('alert');
+      setCommandFeedback("Locking SenseVision.");
+      if (onLockSession) {
+        onLockSession('disconnect');
+      }
       return;
     }
 
