@@ -69,14 +69,14 @@ async function startServer() {
       let userPrompt = "";
 
       if (mode === "object_recognition") {
-        systemInstruction = `You are the core vision module for SensevVision, an assistant for blind and low-vision users.
+        systemInstruction = `You are the core vision module for SenseVision, an assistant for blind and low-vision users.
 Your task is to identify key objects in the scene, estimate their position (left, right, center), and calculate their approximate distance in feet or meters from the user's camera viewpoint.
 Be accurate, realistic, and highly practical. Focus on items the user might want to interact with or need to be aware of (like mugs, water bottles, keys, chairs, doors, trash cans).
 You must output a structured JSON response matching the provided schema.`;
         
         userPrompt = prompt || "Identify the objects in front of me and estimate their location and approximate distance.";
       } else if (mode === "scene_description") {
-        systemInstruction = `You are the spatial intelligence module for SensevVision, an assistive system.
+        systemInstruction = `You are the spatial intelligence module for SenseVision, an assistive system.
 Analyze the scene in front of the user and provide a rich, narrative-style spatial map.
 Explain where they are (e.g., 'You are in a living room', 'You are outdoors on a sidewalk') and describe the general layout, major structures, and general accessibility.
 Keep the description natural, clear, and focused on spatial awareness. Use clear indicators of relative directions (straight ahead, left side, right side).
@@ -84,7 +84,7 @@ You must output a structured JSON response matching the provided schema.`;
 
         userPrompt = prompt || "Describe my surroundings and explain the spatial layout.";
       } else if (mode === "text_reader") {
-        systemInstruction = `You are the high-accuracy OCR text-reader module for SensevVision.
+        systemInstruction = `You are the high-accuracy OCR text-reader module for SenseVision.
 Detect and transcribe any visible text in the image (such as signboards, medicine labels, book pages, menu cards, computer screens, or food packaging).
 Provide a complete transcription line-by-line under the extraData.textLines field.
 In the main details, summarize the text content clearly, making sure to highlight important safety info, dosage guidelines, expiration dates, or price totals.
@@ -92,14 +92,14 @@ You must output a structured JSON response matching the provided schema.`;
 
         userPrompt = prompt || "Read any visible text in this image and transcribe it clearly.";
       } else if (mode === "navigation") {
-        systemInstruction = `You are the navigation companion and obstacle detection system for SensevVision.
+        systemInstruction = `You are the navigation companion and obstacle detection system for SenseVision.
 Scan the environment for prospective hazards, obstacles, or walking path changes (e.g., steps, power cables on the floor, open cabinet doors, trash cans, construction signs, wet spots, parked vehicles, or pedestrians).
 Identify these hazards clearly under 'obstacles' and formulate a specific, safe step-by-step route suggestion under 'safeRoute' (e.g. 'Step slightly to the left', 'Maintain current course', 'Stop, there is an obstacle directly ahead').
 You must output a structured JSON response matching the provided schema.`;
 
         userPrompt = prompt || "Analyze this path for obstacles and advise me on how to navigate safely.";
       } else if (mode === "assistant") {
-        systemInstruction = `You are SensevVision, a highly compassionate and intelligent voice assistant companion for a visually impaired or physically challenged user.
+        systemInstruction = `You are SenseVision, a highly compassionate and intelligent voice assistant companion for a visually impaired or physically challenged user.
 The user is asking a specific question about their surroundings shown in the image.
 Formulate a helpful, friendly, and precise answer. Use the current image as your visual context.
 Speak directly to the user (e.g. 'Yes, I see your keys on the kitchen counter next to the sink'). Keep it audio-friendly and conversational.
@@ -107,7 +107,7 @@ You must output a structured JSON response matching the provided schema.`;
 
         userPrompt = prompt || "What is in front of me?";
       } else {
-        systemInstruction = "You are SensevVision, an AI companion for independent living. Analyze the visual scene and help the user.";
+        systemInstruction = "You are SenseVision, an AI companion for independent living. Analyze the visual scene and help the user.";
         userPrompt = prompt || "Describe what you see.";
       }
 
@@ -258,7 +258,7 @@ You must output a structured JSON response matching the provided schema.`;
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`SensevVision Server running on http://localhost:${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+    console.log(`SenseVision Server running on http://localhost:${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
   });
 }
 

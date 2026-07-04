@@ -8,13 +8,12 @@ interface GlobalVoiceTriggerProps {
   onModeChange: (mode: AppMode) => void;
   onTriggerScan: () => void;
   onSendAssistantMessage: (text: string) => void;
-  inputType: 'camera' | 'simulator';
-  onInputTypeChange: (type: 'camera' | 'simulator') => void;
   activeTab: 'scan' | 'logs' | 'preferences';
   onTabChange: (tab: 'scan' | 'logs' | 'preferences') => void;
   isAnalyzing: boolean;
   isSpeaking: boolean;
   onMuteSpeech: () => void;
+  onLockSession?: (type?: 'normal' | 'disconnect') => void;
 }
 
 export default function GlobalVoiceTrigger({
@@ -22,13 +21,12 @@ export default function GlobalVoiceTrigger({
   onModeChange,
   onTriggerScan,
   onSendAssistantMessage,
-  inputType,
-  onInputTypeChange,
   activeTab,
   onTabChange,
   isAnalyzing,
   isSpeaking,
-  onMuteSpeech
+  onMuteSpeech,
+  onLockSession
 }: GlobalVoiceTriggerProps) {
   const [isListening, setIsListening] = useState(false);
   const [recognition, setRecognition] = useState<any | null>(null);
@@ -75,7 +73,7 @@ export default function GlobalVoiceTrigger({
         setRecognition(rec);
       }
     }
-  }, [activeMode, inputType, activeTab]);
+  }, [activeMode, activeTab]);
 
   const toggleListening = () => {
     if (!recognition) {
@@ -107,6 +105,16 @@ export default function GlobalVoiceTrigger({
       setCommandFeedback("Opening voice help instructions.");
       speakText("Voice guide. You can say navigation, read text, describe surroundings, or ask direct questions.", false);
       setShowHelpModal(true);
+      return;
+    }
+
+    // Session Locking commands
+    if (text === "lock sensevision" || text === "goodbye" || text === "end session" || text === "exit" || text === "end conversation") {
+      playChime('alert');
+      setCommandFeedback("Locking SenseVision.");
+      if (onLockSession) {
+        onLockSession('disconnect');
+      }
       return;
     }
 
@@ -190,23 +198,6 @@ export default function GlobalVoiceTrigger({
       setCommandFeedback("Navigating to A11y Preferences.");
       onTabChange('preferences');
       speakText("Opening accessibility preferences.", false);
-      return;
-    }
-
-    // Input type triggers
-    if (text.includes("simulator") || text.includes("preset") || text.includes("demo")) {
-      playChime('success');
-      setCommandFeedback("Switching to Environment Simulator.");
-      onInputTypeChange('simulator');
-      speakText("Switched to Preset Environment Simulator.", false);
-      return;
-    }
-
-    if (text.includes("camera") || text.includes("live") || text.includes("uploader") || text.includes("video")) {
-      playChime('success');
-      setCommandFeedback("Switching to Live Camera.");
-      onInputTypeChange('camera');
-      speakText("Switched to Live Camera Feed and Photo Uploader.", false);
       return;
     }
 
@@ -345,10 +336,10 @@ export default function GlobalVoiceTrigger({
             <div className="space-y-1.5 text-center sm:text-left">
               <h3 className="text-base font-black text-white uppercase tracking-wider flex items-center justify-center sm:justify-start space-x-2">
                 <Mic className="w-5 h-5 text-amber-400" />
-                <span>SensevVision Universal Voice Guide</span>
+                <span>SenseVision Universal Voice Guide</span>
               </h3>
               <p className="text-xs text-slate-400 leading-normal">
-                Speak commands to control SensevVision hands-free. Simply tap the large floating mic on the bottom right of any screen to begin speaking.
+                Speak commands to control SenseVision hands-free. Simply tap the large floating mic on the bottom right of any screen to begin speaking.
               </p>
             </div>
 
@@ -386,7 +377,7 @@ export default function GlobalVoiceTrigger({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-850 text-xs">
                     <span className="font-bold text-slate-200">"Scan" / "Capture"</span>
-                    <p className="text-[10px] text-slate-500 mt-0.5">Triggers scan of active camera or simulator</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Triggers scan of active camera or uploaded photo</p>
                   </div>
                   <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-850 text-xs">
                     <span className="font-bold text-slate-200">"Stop" / "Mute"</span>
@@ -402,7 +393,7 @@ export default function GlobalVoiceTrigger({
                 </h4>
                 <div className="bg-slate-950 p-3 rounded-lg border border-slate-850 text-xs space-y-1.5">
                   <p className="text-slate-300 font-medium">
-                    You can speak any direct question about your surroundings. SensevVision will immediately route your question to the Multimodal Gemini Assistant:
+                    You can speak any direct question about your surroundings. SenseVision will immediately route your question to the Multimodal Gemini Assistant:
                   </p>
                   <ul className="list-disc pl-4 space-y-1 text-slate-400 font-mono text-[10px]">
                     <li>"What is on the desk in front of me?"</li>

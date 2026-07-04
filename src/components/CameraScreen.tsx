@@ -42,9 +42,9 @@ export default function CameraScreen({ onCapture, isAnalyzing, activeModeLabel }
       console.warn("Camera initialization failed:", err);
       setCameraError(
         "Camera stream blocked or unavailable. This is normal inside sandboxed previews. " +
-        "Please use the Drag & Drop area below, or try the interactive Preset Simulator."
+        "Please use the Drag & Drop area below to select or upload any photo."
       );
-      speakText("Camera unavailable. You can upload an image or use the environment simulator.", false);
+      speakText("Camera unavailable. You can drag and drop or upload an image to analyze.", false);
     }
   };
 
@@ -157,25 +157,25 @@ export default function CameraScreen({ onCapture, isAnalyzing, activeModeLabel }
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-950 rounded-2xl overflow-hidden border border-slate-800" id="camera-viewport-card">
+    <div className="flex flex-col h-full bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm" id="camera-viewport-card">
       {/* Top Header Status */}
-      <div className="bg-slate-900 border-b border-slate-800 px-4 py-3 flex justify-between items-center">
+      <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 flex justify-between items-center">
         <div className="flex items-center space-x-2">
           <span className="flex h-2.5 w-2.5 relative">
             <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${capturedPreview ? 'bg-amber-400' : 'bg-emerald-400'}`}></span>
             <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${capturedPreview ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
           </span>
-          <span className="text-xs font-mono font-bold tracking-widest text-slate-300 uppercase">
+          <span className="text-xs font-mono font-bold tracking-widest text-slate-800 uppercase">
             {capturedPreview ? "STATIC PHOTO PREVIEW" : "LIVE CAMERA FEED"}
           </span>
         </div>
-        <div className="bg-slate-800 text-amber-400 border border-slate-700 px-2.5 py-0.5 rounded text-[11px] font-mono uppercase font-bold">
+        <div className="bg-blue-50 text-blue-600 border border-blue-100 px-2.5 py-0.5 rounded text-[11px] font-mono uppercase font-bold">
           {activeModeLabel}
         </div>
       </div>
 
       {/* Main View Area (Video / Upload Preview / Error Panel) */}
-      <div className="relative flex-1 bg-slate-900 flex items-center justify-center min-h-[320px] overflow-hidden">
+      <div className="relative flex-1 bg-slate-50 flex items-center justify-center min-h-[320px] overflow-hidden">
         
         {/* Real Live Video Stream */}
         {stream && !capturedPreview && (
@@ -191,15 +191,15 @@ export default function CameraScreen({ onCapture, isAnalyzing, activeModeLabel }
 
         {/* Uploaded Static Preview */}
         {capturedPreview && (
-          <div className="absolute inset-0 bg-slate-900 flex items-center justify-center p-2">
+          <div className="absolute inset-0 bg-slate-50 flex items-center justify-center p-2">
             <img 
               src={capturedPreview} 
               alt="Scan Target" 
-              className="max-w-full max-h-full object-contain rounded-lg border border-slate-700" 
+              className="max-w-full max-h-full object-contain rounded-lg border border-slate-200" 
             />
             <button
               onClick={clearUploadedImage}
-              className="absolute top-4 right-4 bg-red-600/90 text-white text-xs px-3 py-1.5 rounded-lg hover:bg-red-500 border border-red-500 transition-colors"
+              className="absolute top-4 right-4 bg-red-600 text-white text-xs px-3 py-1.5 rounded-lg hover:bg-red-500 border border-red-500 transition-colors cursor-pointer"
               aria-label="Remove uploaded image and return to live camera"
             >
               Reset Camera
@@ -209,13 +209,13 @@ export default function CameraScreen({ onCapture, isAnalyzing, activeModeLabel }
 
         {/* Camera block warning inside iframe */}
         {!stream && !capturedPreview && cameraError && (
-          <div className="p-6 text-center max-w-md bg-slate-900/90 backdrop-blur z-10 rounded-xl border border-slate-800 m-4">
+          <div className="p-6 text-center max-w-md bg-white/95 backdrop-blur z-10 rounded-xl border border-slate-200 m-4 shadow-md">
             <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-3" />
-            <h3 className="text-sm font-bold text-slate-100 uppercase tracking-wider mb-2">Camera Stream Restricted</h3>
-            <p className="text-xs text-slate-400 leading-relaxed mb-4">{cameraError}</p>
+            <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-2">Camera Stream Restricted</h3>
+            <p className="text-xs text-slate-600 leading-relaxed mb-4">{cameraError}</p>
             <button 
               onClick={startCamera}
-              className="inline-flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-4 py-2 rounded-lg font-medium border border-slate-700 transition-colors"
+              className="inline-flex items-center space-x-2 bg-slate-150 hover:bg-slate-200 text-slate-700 text-xs px-4 py-2 rounded-lg font-medium border border-slate-250 transition-colors cursor-pointer"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               <span>Retry Camera Permission</span>
@@ -225,8 +225,8 @@ export default function CameraScreen({ onCapture, isAnalyzing, activeModeLabel }
 
         {/* Scanning Pulse effect during analysis */}
         {isAnalyzing && (
-          <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-amber-500 to-transparent animate-pulse" style={{ top: '50%' }}>
-            <div className="absolute inset-0 bg-amber-400 blur-sm"></div>
+          <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-blue-600 to-transparent animate-pulse" style={{ top: '50%' }}>
+            <div className="absolute inset-0 bg-blue-400 blur-sm"></div>
           </div>
         )}
       </div>
@@ -237,8 +237,8 @@ export default function CameraScreen({ onCapture, isAnalyzing, activeModeLabel }
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
-        className={`border-t border-slate-800 p-4 transition-colors cursor-pointer text-center ${
-          isDragOver ? 'bg-amber-500/10 border-amber-500/50' : 'bg-slate-900/60 hover:bg-slate-900'
+        className={`border-t border-slate-200 p-4 transition-colors cursor-pointer text-center ${
+          isDragOver ? 'bg-blue-50 border-blue-500/50' : 'bg-slate-50 hover:bg-slate-100'
         }`}
         aria-label="Upload source file drag or click selector"
       >
@@ -250,19 +250,19 @@ export default function CameraScreen({ onCapture, isAnalyzing, activeModeLabel }
           className="hidden" 
         />
         <div className="flex flex-col items-center justify-center space-y-1">
-          <Upload className={`w-5 h-5 ${isDragOver ? 'text-amber-400 animate-bounce' : 'text-slate-400'}`} />
-          <p className="text-xs text-slate-300">
-            <span className="font-bold text-amber-400">Drag & Drop</span> any photo here, or <span className="font-bold underline text-amber-400">browse files</span>
+          <Upload className={`w-5 h-5 ${isDragOver ? 'text-blue-600 animate-bounce' : 'text-slate-400'}`} />
+          <p className="text-xs text-slate-600">
+            <span className="font-bold text-blue-600">Drag & Drop</span> any photo here, or <span className="font-bold underline text-blue-600">browse files</span>
           </p>
-          <p className="text-[10px] text-slate-500 font-mono">SUPPORTS JPEG, PNG, WEBP • MAX 15MB</p>
+          <p className="text-[10px] text-slate-400 font-mono">SUPPORTS JPEG, PNG, WEBP • MAX 15MB</p>
         </div>
       </div>
 
       {/* Huge Accessible Capture Control Bar */}
-      <div className="bg-slate-950 border-t border-slate-800 p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="bg-slate-50 border-t border-slate-200 p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="text-left">
-          <p className="text-[11px] font-mono text-slate-400 uppercase tracking-wider">Instructions</p>
-          <p className="text-xs text-slate-300 font-medium leading-normal max-w-sm">
+          <p className="text-[11px] font-mono text-slate-500 uppercase tracking-wider">Instructions</p>
+          <p className="text-xs text-slate-600 font-medium leading-normal max-w-sm">
             Press the main trigger button to analyze. Turn on your audio speakers to receive step-by-step guidance.
           </p>
         </div>
@@ -271,18 +271,18 @@ export default function CameraScreen({ onCapture, isAnalyzing, activeModeLabel }
           id="scan-trigger-btn"
           disabled={isAnalyzing || (!stream && !capturedPreview)}
           onClick={handleCapture}
-          className={`w-full sm:w-auto min-h-[52px] px-8 rounded-xl font-bold uppercase tracking-wider text-xs inline-flex items-center justify-center space-x-3 transition-all transform active:scale-95 ${
+          className={`w-full sm:w-auto min-h-[52px] px-8 rounded-xl font-bold uppercase tracking-wider text-xs inline-flex items-center justify-center space-x-3 transition-all transform active:scale-95 cursor-pointer ${
             isAnalyzing 
-              ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700' 
+              ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200' 
               : (!stream && !capturedPreview)
-                ? 'bg-slate-900 text-slate-600 cursor-not-allowed border border-slate-800'
-                : 'bg-amber-400 hover:bg-amber-300 text-slate-950 hover:shadow-[0_0_20px_rgba(245,158,11,0.25)] focus:ring-4 focus:ring-amber-500/50 outline-none border border-amber-500'
+                ? 'bg-slate-50 text-slate-300 cursor-not-allowed border border-slate-100'
+                : 'bg-blue-600 hover:bg-blue-700 text-white hover:shadow-md focus:ring-4 focus:ring-blue-500/50 outline-none border border-blue-600 font-black'
           }`}
           aria-label={`Trigger Visual Scan for ${activeModeLabel}. Keyboard shortcut: Spacebar when focused.`}
         >
           {isAnalyzing ? (
             <>
-              <RefreshCw className="w-4 h-4 animate-spin text-slate-500" />
+              <RefreshCw className="w-4 h-4 animate-spin text-slate-400" />
               <span>Analyzing visual field...</span>
             </>
           ) : (

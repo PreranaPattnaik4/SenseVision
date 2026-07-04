@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+const logoImage = "https://www.dropbox.com/scl/fi/4pluub1fokqdrf3ovrvdf/a1ffdb5f-507f-4469-b502-50f48b90fe24.png?rlkey=cwo5zpluoadchv9hp4h0amjhr&st=wx16wfee&raw=1";
 import { 
   Camera, 
   Sparkles, 
@@ -19,32 +20,86 @@ import {
   Info,
   ChevronRight,
   Clipboard,
-  Play
+  Play,
+  Lock,
+  Mic
 } from 'lucide-react';
 
-import { AppMode, VisionLog, AssistantMessage, AnalysisResponse, AssistanceStyle, PresetEnvironment } from './types';
+import { AppMode, VisionLog, AssistantMessage, AnalysisResponse, AssistanceStyle } from './types';
 import CameraScreen from './components/CameraScreen';
-import SimulatorScreen from './components/SimulatorScreen';
 import AssistantScreen from './components/AssistantScreen';
 import HistoryLogs from './components/HistoryLogs';
 import Preferences from './components/Preferences';
 import GlobalVoiceTrigger from './components/GlobalVoiceTrigger';
 import VoiceIdentityCard from './components/VoiceIdentityCard';
 import ChooseCompanionCard, { COMPANIONS } from './components/ChooseCompanionCard';
-import { PRESET_ENVIRONMENTS } from './utils/presets';
 import { speakText, cancelSpeech, playChime } from './utils/audio';
 
 export default function App() {
+  // Authentication & Security Locks
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [voiceAuthActive, setVoiceAuthActive] = useState(false);
+  const [authTriggerType, setAuthTriggerType] = useState<'normal' | 'disconnect' | null>(null);
+
+  // Secure PIN Authentication Options
+  const [authMethod, setAuthMethod] = useState<'voice' | 'pin'>('voice');
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState('');
+
+  const handlePinKeyPress = (val: string) => {
+    setPinError('');
+    playChime('click');
+    if (val === 'backspace') {
+      setPinInput(prev => prev.slice(0, -1));
+    } else if (val === 'clear') {
+      setPinInput('');
+    } else {
+      if (pinInput.length < 4) {
+        const nextPin = pinInput + val;
+        setPinInput(nextPin);
+        
+        // Auto-submit when length reaches 4
+        if (nextPin === '1111') {
+          playChime('success');
+          speakText("PIN accepted. Personal companion activated.", false);
+          setTimeout(() => {
+            setIsAuthenticated(true);
+            setVoiceCompanionActive(true);
+            setActiveMode(AppMode.ASSISTANT);
+            setPinInput('');
+            setPinError('');
+          }, 450);
+        } else if (nextPin.length === 4) {
+          playChime('alert');
+          setPinError('Incorrect security PIN. Please try again.');
+          speakText("Incorrect PIN code.", false);
+          setTimeout(() => {
+            setPinInput('');
+          }, 1000);
+        }
+      }
+    }
+  };
+
+  const handleLockSession = (type?: 'normal' | 'disconnect') => {
+    setIsAuthenticated(false);
+    setPinInput('');
+    setPinError('');
+    if (type === 'disconnect') {
+      setVoiceAuthActive(true);
+      setAuthTriggerType('disconnect');
+    } else {
+      setVoiceAuthActive(false);
+      setAuthTriggerType(null);
+    }
+  };
+
   // Navigation & Screen Modes
   const [activeMode, setActiveMode] = useState<AppMode>(AppMode.OBJECT_RECOGNITION);
-  const [inputType, setInputType] = useState<'camera' | 'simulator'>('simulator');
   const [activeTab, setActiveTab] = useState<'scan' | 'logs' | 'preferences'>('scan');
 
   // Continuous voice companion state
   const [voiceCompanionActive, setVoiceCompanionActive] = useState(false);
-
-  // Selected preset environment in simulator
-  const [selectedEnv, setSelectedEnv] = useState<PresetEnvironment>(PRESET_ENVIRONMENTS[0]);
 
   // Scanning & Response State
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -76,7 +131,10 @@ export default function App() {
 
   // Initialize and load historical logs from LocalStorage
   useEffect(() => {
-    const savedLogs = localStorage.getItem('sensevvision_logs');
+    // Ensure the page always starts at the top of the application upon mount or refresh
+    window.scrollTo(0, 0);
+
+    const savedLogs = localStorage.getItem('sensevision_logs');
     if (savedLogs) {
       try {
         setLogs(JSON.parse(savedLogs));
@@ -85,7 +143,7 @@ export default function App() {
       }
     }
 
-    const savedPrefs = localStorage.getItem('sensevvision_prefs');
+    const savedPrefs = localStorage.getItem('sensevision_prefs');
     if (savedPrefs) {
       try {
         const parsed = JSON.parse(savedPrefs);
@@ -100,21 +158,16 @@ export default function App() {
       }
     }
 
-    // Welcoming spoken guide
-    playChime('success');
-    speakText(
-      "Welcome to SensevVision, your intelligent visual companion. Environment simulator is loaded and active. Use spacebar or tap items to start.", 
-      false
-    );
+    // Welcoming spoken guide is suppressed until successful voice identity authentication
   }, []);
 
   // Save logs and preferences
   useEffect(() => {
-    localStorage.setItem('sensevvision_logs', JSON.stringify(logs));
+    localStorage.setItem('sensevision_logs', JSON.stringify(logs));
   }, [logs]);
 
   useEffect(() => {
-    localStorage.setItem('sensevvision_prefs', JSON.stringify({
+    localStorage.setItem('sensevision_prefs', JSON.stringify({
       useCloudVoice,
       selectedVoice,
       largeTouchTargets,
@@ -251,20 +304,8 @@ export default function App() {
 
     try {
       // Determine what image we should send as contextual sight
-      let imageToSend = capturedImage;
-
-      // If no photo was captured yet, fetch the active selected preset image from simulator
-      if (!imageToSend) {
-        const preset = selectedEnv || PRESET_ENVIRONMENTS[0];
-        const res = await fetch(preset.imageUrl);
-        const blob = await res.blob();
-        const reader = new FileReader();
-        
-        imageToSend = await new Promise<string>((resolve) => {
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(blob);
-        });
-      }
+      // If no photo was captured yet, we send a tiny transparent pixel placeholder base64
+      let imageToSend = capturedImage || "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 
       const response = await fetch('/api/analyze', {
         method: 'POST',
@@ -347,57 +388,28 @@ export default function App() {
 
   const triggerGlobalVoiceScan = async () => {
     if (isAnalyzing) return;
-    if (inputType === 'simulator') {
-      try {
-        const response = await fetch(selectedEnv.imageUrl);
-        const blob = await response.blob();
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          if (typeof reader.result === 'string') {
-            performVisualAnalysis(reader.result);
-          }
-        };
-        reader.readAsDataURL(blob);
-      } catch (err) {
-        console.error("Failed to load preset simulator image for voice scan", err);
-        speakText("Failed to retrieve environment image for visual analysis. Please try again.", false);
+    
+    const video = document.getElementById('camera-video-stream') as HTMLVideoElement | null;
+    if (video) {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        performVisualAnalysis(dataUrl);
       }
+    } else if (capturedImage) {
+      performVisualAnalysis(capturedImage);
     } else {
-      const video = document.getElementById('camera-video-stream') as HTMLVideoElement | null;
-      if (video) {
-        const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth || 640;
-        canvas.height = video.videoHeight || 480;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-          performVisualAnalysis(dataUrl);
-        }
-      } else if (capturedImage) {
-        performVisualAnalysis(capturedImage);
-      } else {
-        speakText("No camera feed active. Scanning simulated environment instead.", false);
-        try {
-          const response = await fetch(selectedEnv.imageUrl);
-          const blob = await response.blob();
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            if (typeof reader.result === 'string') {
-              performVisualAnalysis(reader.result);
-            }
-          };
-          reader.readAsDataURL(blob);
-        } catch (err) {
-          console.error(err);
-        }
-      }
+      speakText("No active camera or photo found to scan. Please capture or upload a scene.", false);
     }
   };
 
   const clearAllLogs = () => {
     setLogs([]);
-    localStorage.removeItem('sensevvision_logs');
+    localStorage.removeItem('sensevision_logs');
   };
 
   return (
@@ -411,27 +423,43 @@ export default function App() {
       {/* Top Accessible Header bar */}
       <header className="bg-white border-b border-slate-200 z-30 shadow-xs relative" id="main-navigation-header">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+          <div className="flex justify-between items-center h-28 sm:h-36">
             
             {/* Logo/Identity */}
-            <div className="flex items-center space-x-3">
-              <div className="h-9 w-9 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-sm" id="sensevision-brand-badge">
-                <Accessibility className="w-5 h-5 font-bold" />
-              </div>
-              <div>
-                <span className="text-base font-extrabold tracking-tight text-slate-900 block">SenseVision</span>
-                <span className="text-[9px] text-blue-600 font-mono font-bold tracking-widest block -mt-1 uppercase">
-                  AI INDEPENDENT LIVING SIGHT
-                </span>
-              </div>
+            <div className="flex items-center">
+              <img 
+                src={logoImage} 
+                alt="SenseVision - See Smarter, Live Freely" 
+                className="h-20 sm:h-28 w-auto object-contain" 
+                id="sensevision-brand-logo"
+              />
             </div>
 
             {/* Quick Speech Mute Buttons */}
             <div className="flex items-center space-x-3.5">
-              <span className="hidden sm:inline-flex items-center space-x-1.5 bg-slate-50 px-3 py-1 rounded-full text-[10px] font-mono text-slate-500 border border-slate-200 font-bold">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>AI SIGHT SERVICE ACTIVE</span>
-              </span>
+              {!isAuthenticated ? (
+                <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
+                  <span className="inline-flex items-center space-x-1.5 bg-amber-50 px-2.5 py-1 rounded-full text-[10px] font-mono text-amber-700 border border-amber-200 font-bold">
+                    <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></span>
+                    <span>👁️ AI SIGHT SERVICE: STANDBY</span>
+                  </span>
+                  <span className="inline-flex items-center space-x-1.5 bg-red-50 px-2.5 py-1 rounded-full text-[10px] font-mono text-red-600 border border-red-200 font-bold">
+                    <span className="h-2 w-2 rounded-full bg-red-500"></span>
+                    <span>🔒 PERSONAL COMPANION LOCKED</span>
+                  </span>
+                </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
+                  <span className="inline-flex items-center space-x-1.5 bg-emerald-50 px-2.5 py-1 rounded-full text-[10px] font-mono text-emerald-600 border border-emerald-200 font-bold">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>👁️ AI SIGHT SERVICE: ONLINE</span>
+                  </span>
+                  <span className="inline-flex items-center space-x-1.5 bg-emerald-50 px-2.5 py-1 rounded-full text-[10px] font-mono text-emerald-600 border border-emerald-200 font-bold">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>🟢 PERSONAL COMPANION ACTIVE</span>
+                  </span>
+                </div>
+              )}
 
               {isSpeaking ? (
                 <button
@@ -462,45 +490,57 @@ export default function App() {
             <button
               id="tab-scan-selector"
               onClick={() => {
+                if (!isAuthenticated) return;
                 setActiveTab('scan');
                 playChime('click');
                 speakText("Switched to Scan and Companion mode.", false);
               }}
-              className={`px-4.5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer ${
+              className={`px-4.5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all ${
+                !isAuthenticated ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+              } ${
                 activeTab === 'scan' 
                   ? 'bg-blue-600 text-white shadow-sm' 
                   : 'bg-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100'
               }`}
+              disabled={!isAuthenticated}
             >
               Scan & Sight
             </button>
             <button
               id="tab-logs-selector"
               onClick={() => {
+                if (!isAuthenticated) return;
                 setActiveTab('logs');
                 playChime('click');
                 speakText(`Auditory history logs. You have ${logs.length} previous scans saved.`, false);
               }}
-              className={`px-4.5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer ${
+              className={`px-4.5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all ${
+                !isAuthenticated ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+              } ${
                 activeTab === 'logs' 
                   ? 'bg-blue-600 text-white shadow-sm' 
                   : 'bg-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100'
               }`}
+              disabled={!isAuthenticated}
             >
               Auditory Logs ({logs.length})
             </button>
             <button
               id="tab-prefs-selector"
               onClick={() => {
+                if (!isAuthenticated) return;
                 setActiveTab('preferences');
                 playChime('click');
                 speakText("Accessibility options. Modify cloud speech engines and visual touch settings.", false);
               }}
-              className={`px-4.5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer ${
+              className={`px-4.5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all ${
+                !isAuthenticated ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+              } ${
                 activeTab === 'preferences' 
                   ? 'bg-blue-600 text-white shadow-sm' 
                   : 'bg-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100'
               }`}
+              disabled={!isAuthenticated}
             >
               A11y Preferences
             </button>
@@ -511,30 +551,39 @@ export default function App() {
       {/* Primary Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-8 z-10" id="primary-content-wrapper">
         
-        {/* TAB 1: SCAN AND COMPANION */}
-        {activeTab === 'scan' && (
-          <div className="space-y-6">
-            
-            {/* Voice Identity Secure Card */}
-            <VoiceIdentityCard
-              onVerificationSuccess={(active) => {
-                setVoiceCompanionActive(active);
-                if (active) {
-                  setActiveMode(AppMode.ASSISTANT);
-                }
-              }}
-              onSendAssistantMessage={handleSendAssistantMessage}
-              isAnalyzing={isAnalyzing || isAssistantResponding}
-              isSpeaking={isSpeaking}
-              assistantMessages={assistantMessages}
-              onMuteSpeech={handleMuteSpeech}
-              selectedCompanion={selectedCompanion}
-              rememberCompanionChoice={rememberCompanionChoice}
-              useCloudVoice={useCloudVoice}
-              onShowCompanionSelection={(show) => {
-                setShowCompanionSelector(show);
-              }}
-            />
+        {isAuthenticated ? (
+          <>
+            {/* TAB 1: SCAN AND COMPANION */}
+            {activeTab === 'scan' && (
+              <div className="space-y-6">
+                
+                {/* Voice Identity Secure Card */}
+                <VoiceIdentityCard
+                  isAuthenticated={isAuthenticated}
+                  onVerificationSuccess={(active) => {
+                    setVoiceCompanionActive(active);
+                    if (active) {
+                      setActiveMode(AppMode.ASSISTANT);
+                    }
+                  }}
+                  onAuthSuccess={() => {
+                    setIsAuthenticated(true);
+                  }}
+                  onLockSession={(type) => {
+                    handleLockSession(type);
+                  }}
+                  onSendAssistantMessage={handleSendAssistantMessage}
+                  isAnalyzing={isAnalyzing || isAssistantResponding}
+                  isSpeaking={isSpeaking}
+                  assistantMessages={assistantMessages}
+                  onMuteSpeech={handleMuteSpeech}
+                  selectedCompanion={selectedCompanion}
+                  rememberCompanionChoice={rememberCompanionChoice}
+                  useCloudVoice={useCloudVoice}
+                  onShowCompanionSelection={(show) => {
+                    setShowCompanionSelector(show);
+                  }}
+                />
 
             {/* Choose Your AI Companion Panel */}
             {showCompanionSelector && (
@@ -608,73 +657,16 @@ export default function App() {
               </div>
             </div>
 
-            {/* Input Selection Stage (Live Web Cam vs Simulator) */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center bg-white p-5 lg:p-6 border border-slate-200 rounded-2xl shadow-sm text-left animate-fade-in" id="input-source-toggle-panel">
-              <div className="md:col-span-4">
-                <span className="text-[10px] font-mono text-slate-400 tracking-wider uppercase font-bold block mb-1">
-                  STEP 2: CHOOSE CAMERA SOURCE
-                </span>
-                <p className="text-xs text-slate-500 leading-relaxed font-sans">
-                  Select between your live web-camera feed or our high-quality simulated indoor/outdoor preset environments.
-                </p>
-              </div>
-              <div className="md:col-span-8 flex justify-end gap-3 w-full">
-                <button
-                  id="source-selector-simulator"
-                  onClick={() => {
-                    setInputType('simulator');
-                    playChime('click');
-                    speakText("Environment simulator selected.", false);
-                  }}
-                  className={`flex-1 md:flex-none px-6 py-3 rounded-xl border text-xs font-bold uppercase tracking-wider transition-all inline-flex items-center justify-center space-x-2 cursor-pointer ${
-                    inputType === 'simulator'
-                      ? 'bg-blue-600 border-blue-600 text-white font-black shadow-sm'
-                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  <Layers className="w-4 h-4" />
-                  <span>Preset Simulator</span>
-                </button>
-                <button
-                  id="source-selector-camera"
-                  onClick={() => {
-                    setInputType('camera');
-                    playChime('click');
-                    speakText("Real camera feed and photo uploader selected.", false);
-                  }}
-                  className={`flex-1 md:flex-none px-6 py-3 rounded-xl border text-xs font-bold uppercase tracking-wider transition-all inline-flex items-center justify-center space-x-2 cursor-pointer ${
-                    inputType === 'camera'
-                      ? 'bg-blue-600 border-blue-600 text-white font-black shadow-sm'
-                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  <Camera className="w-4 h-4" />
-                  <span>Real Camera & Upload</span>
-                </button>
-              </div>
-            </div>
-
             {/* Main Stage Grid (Left: Active Feed, Right: Smart Response Screen) */}
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start" id="main-interactive-grid">
               
               {/* Active Input Container */}
               <div className="xl:col-span-7">
-                {inputType === 'camera' ? (
-                  <CameraScreen 
-                    onCapture={performVisualAnalysis} 
-                    isAnalyzing={isAnalyzing}
-                    activeModeLabel={getModeLabelText(activeMode)}
-                  />
-                ) : (
-                  <SimulatorScreen 
-                    onScanPreset={performVisualAnalysis}
-                    isAnalyzing={isAnalyzing}
-                    activeModeLabel={getModeLabelText(activeMode)}
-                    assistanceStyle={assistanceStyle}
-                    selectedEnv={selectedEnv}
-                    onSelectEnv={setSelectedEnv}
-                  />
-                )}
+                <CameraScreen 
+                  onCapture={performVisualAnalysis} 
+                  isAnalyzing={isAnalyzing}
+                  activeModeLabel={getModeLabelText(activeMode)}
+                />
               </div>
 
               {/* Smart Response Output Display */}
@@ -902,6 +894,249 @@ export default function App() {
           />
         )}
 
+          </>
+        ) : (
+          /* Render the Voice Identity & Security section inline as the primary focus */
+          <div className="max-w-4xl w-full mx-auto bg-white border border-slate-200 rounded-2xl shadow-md p-5 sm:p-6 relative animate-fade-in" id="secure-lock-content-wrapper">
+            {/* Decorative Top Bar */}
+            <div className="absolute top-0 inset-x-0 bg-gradient-to-r from-red-500 to-red-400 h-1.5 rounded-t-2xl"></div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-8 items-stretch text-left" id="secure-lock-grid-layout">
+              {/* Left Column: Branding (5 cols) */}
+              <div className="md:col-span-5 flex flex-col justify-between space-y-4 pt-1 border-b md:border-b-0 md:border-r border-slate-150 pb-5 md:pb-0 md:pr-6 lg:pr-8">
+                <div className="space-y-4">
+                  <div 
+                    className="bg-slate-50 p-2 rounded-xl shadow-xs hover:scale-105 transition-all duration-300 inline-flex items-center justify-center cursor-pointer active:scale-95"
+                    title="Click to Reload App"
+                    onClick={() => window.location.reload()}
+                  >
+                    <img 
+                      src={logoImage} 
+                      alt="SenseVision Logo" 
+                      className="h-10 w-auto object-contain"
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        const img = e.currentTarget;
+                        if (!img.src.includes('?r=')) {
+                          img.src = `${logoImage}?r=${Date.now()}`;
+                        }
+                      }}
+                    />
+                  </div>
+                  
+                  <div className="space-y-1.5">
+                    <h1 className="text-2xl font-black text-slate-900 tracking-tight">SenseVision</h1>
+                    <p className="text-xs text-blue-600 font-extrabold tracking-wide">See Smarter. Live Freely.</p>
+                    <p className="text-[9px] text-slate-400 font-mono font-bold tracking-widest uppercase">
+                      INTELLIGENT VISUAL UNDERSTANDING
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <p className="text-[11px] text-slate-600 leading-relaxed font-sans">
+                    Welcome to SenseVision. Your personal AI companion is protected by Voice Identity Authentication. Please verify your identity to activate your Sense Companion.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="text-[8px] bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded-full font-mono font-bold inline-block">
+                      Powered by Google AI Technologies
+                    </span>
+                  </div>
+
+                  {/* Mobile & Preview sandboxing advice */}
+                  <div className="mt-4 p-3 bg-amber-50/90 rounded-xl border border-amber-200 text-[10.5px] text-amber-800 space-y-1 font-sans leading-relaxed">
+                    <p className="font-extrabold flex items-center gap-1 text-amber-900">
+                      <span>💡</span> Mobile &amp; Preview Sandbox Notice:
+                    </p>
+                    <p>
+                      Speech Recognition and audio recorders are highly restricted by mobile OS policies (iOS/Android) when running inside an embed iframe.
+                    </p>
+                    <p className="font-semibold text-amber-900">
+                      If the microphone is not picking up your voice, please open the application in a New Tab (using the top-right button) to grant direct browser access.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Actions / Voice Auth Card (7 cols) */}
+              <div className="md:col-span-7 flex flex-col justify-start pl-0 md:pl-2">
+                {/* Auth Method Toggle Tabs */}
+                <div className="flex border-b border-slate-100 mb-5" id="auth-method-tabs">
+                  <button 
+                    onClick={() => {
+                      setAuthMethod('voice');
+                      playChime('click');
+                    }}
+                    className={`flex-1 pb-2.5 text-xs font-extrabold uppercase tracking-wider border-b-2 text-center transition-all cursor-pointer ${
+                      authMethod === 'voice' 
+                        ? 'border-blue-600 text-blue-600' 
+                        : 'border-transparent text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    🎙️ Voice Verification
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setAuthMethod('pin');
+                      playChime('click');
+                    }}
+                    className={`flex-1 pb-2.5 text-xs font-extrabold uppercase tracking-wider border-b-2 text-center transition-all cursor-pointer ${
+                      authMethod === 'pin' 
+                        ? 'border-blue-600 text-blue-600' 
+                        : 'border-transparent text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    🔢 Secure PIN
+                  </button>
+                </div>
+
+                {authMethod === 'voice' ? (
+                  !voiceAuthActive ? (
+                    <div className="space-y-4 py-2 text-center md:text-left">
+                      <div className="inline-flex items-center space-x-1 bg-red-50 text-red-600 border border-red-100 px-3 py-1 rounded-full text-[9px] font-mono font-bold tracking-wider">
+                        <Lock className="w-3 h-3 mr-1 shrink-0 animate-pulse text-red-500" />
+                        <span>SECURE ACCESS REQUIRED</span>
+                      </div>
+                      
+                      <div className="space-y-1.5">
+                        <h2 className="text-sm font-extrabold text-slate-800 uppercase tracking-wide">
+                          Voice Authentication
+                        </h2>
+                        <p className="text-xs text-slate-500 leading-relaxed font-sans">
+                          To access SenseVision's real-time multimodal assistance and live simulator environments, activate your Voice Identity now.
+                        </p>
+                      </div>
+
+                      <div className="pt-2">
+                        <button
+                          id="activate-voice-id-btn"
+                          onClick={() => {
+                            setAuthTriggerType('normal');
+                            setVoiceAuthActive(true);
+                          }}
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 px-4 rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-md focus:outline-none focus:ring-2 focus:ring-blue-600 cursor-pointer flex items-center justify-center space-x-2"
+                        >
+                          <Mic className="w-4 h-4" />
+                          <span>Activate Voice Identity</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-left animate-fade-in" id="voice-auth-container">
+                      <VoiceIdentityCard
+                        autoStartTrigger={authTriggerType || true}
+                        onVerificationSuccess={(active) => {
+                          setVoiceCompanionActive(active);
+                          if (active) {
+                            setActiveMode(AppMode.ASSISTANT);
+                          }
+                        }}
+                        onAuthSuccess={() => {
+                          setIsAuthenticated(true);
+                        }}
+                        onLockSession={(type) => {
+                          handleLockSession(type);
+                        }}
+                        onSendAssistantMessage={handleSendAssistantMessage}
+                        isAnalyzing={isAnalyzing || isAssistantResponding}
+                        isSpeaking={isSpeaking}
+                        assistantMessages={assistantMessages}
+                        onMuteSpeech={handleMuteSpeech}
+                        selectedCompanion={selectedCompanion}
+                        rememberCompanionChoice={rememberCompanionChoice}
+                        useCloudVoice={useCloudVoice}
+                        onShowCompanionSelection={(show) => {
+                          setShowCompanionSelector(show);
+                        }}
+                      />
+                    </div>
+                  )
+                ) : (
+                  /* Render beautiful Secure PIN Entry */
+                  <div className="space-y-4 py-1 text-center md:text-left animate-fade-in" id="pin-auth-container">
+                    <div className="inline-flex items-center space-x-1 bg-red-50 text-red-600 border border-red-100 px-3 py-1 rounded-full text-[9px] font-mono font-bold tracking-wider mx-auto md:mx-0">
+                      <Lock className="w-3 h-3 mr-1 shrink-0 animate-pulse text-red-500" />
+                      <span>PIN SECURITY ACTIVE</span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <h2 className="text-sm font-extrabold text-slate-800 uppercase tracking-wide">
+                        Enter Security PIN
+                      </h2>
+                      <p className="text-xs text-slate-500 leading-relaxed font-sans">
+                        Please enter your 4-digit security PIN code to grant direct browser access.
+                      </p>
+                    </div>
+
+                    {/* PIN Display Indicators */}
+                    <div className="flex flex-col items-center justify-center py-3 bg-slate-50 rounded-xl border border-slate-150 space-y-1.5 max-w-sm mx-auto md:mx-0">
+                      <div className="flex justify-center space-x-4">
+                        {[0, 1, 2, 3].map((index) => {
+                          const hasDigit = pinInput.length > index;
+                          return (
+                            <div 
+                              key={index}
+                              className={`w-3.5 h-3.5 rounded-full border-2 transition-all duration-150 ${
+                                hasDigit 
+                                  ? 'bg-blue-600 border-blue-600 scale-110 shadow-sm' 
+                                  : 'bg-transparent border-slate-300'
+                              }`}
+                            />
+                          );
+                        })}
+                      </div>
+                      
+                      {pinError ? (
+                        <p className="text-xs text-red-600 font-extrabold font-sans animate-pulse">{pinError}</p>
+                      ) : (
+                        <p className="text-[10px] text-slate-400 font-mono">PIN Required: 4 digits</p>
+                      )}
+                    </div>
+
+                    {/* Numerical Keypad Grid */}
+                    <div className="grid grid-cols-3 gap-2.5 max-w-[240px] mx-auto md:mx-0">
+                      {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((num) => (
+                        <button
+                          key={num}
+                          onClick={() => handlePinKeyPress(num)}
+                          className="h-11 w-full bg-slate-50 hover:bg-slate-100 text-slate-800 font-extrabold text-base rounded-xl transition-all cursor-pointer active:scale-95 border border-slate-200 hover:border-slate-300 flex items-center justify-center"
+                        >
+                          {num}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => handlePinKeyPress('clear')}
+                        className="h-11 w-full bg-slate-50 hover:bg-red-50 text-red-600 font-extrabold text-[10px] uppercase tracking-wider rounded-xl transition-all cursor-pointer active:scale-95 border border-slate-200 flex items-center justify-center"
+                      >
+                        Clear
+                      </button>
+                      <button
+                        onClick={() => handlePinKeyPress('0')}
+                        className="h-11 w-full bg-slate-50 hover:bg-slate-100 text-slate-800 font-extrabold text-base rounded-xl transition-all cursor-pointer active:scale-95 border border-slate-200 flex items-center justify-center"
+                      >
+                        0
+                      </button>
+                      <button
+                        onClick={() => handlePinKeyPress('backspace')}
+                        className="h-11 w-full bg-slate-50 hover:bg-slate-100 text-slate-600 font-extrabold rounded-xl transition-all cursor-pointer active:scale-95 border border-slate-200 flex items-center justify-center"
+                        title="Delete Last Digit"
+                      >
+                        ⌫
+                      </button>
+                    </div>
+
+                    <div className="text-center md:text-left">
+                      <p className="text-[10px] text-slate-450 font-sans">
+                        Hint: Default Secure PIN is <span className="font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">1111</span>
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
       </main>
 
       {/* Page Footer */}
@@ -915,19 +1150,22 @@ export default function App() {
       </footer>
 
       {/* Global Accessibility Voice Command Trigger */}
-      <GlobalVoiceTrigger
-        activeMode={activeMode}
-        onModeChange={handleModeChange}
-        onTriggerScan={triggerGlobalVoiceScan}
-        onSendAssistantMessage={handleSendAssistantMessage}
-        inputType={inputType}
-        onInputTypeChange={setInputType}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        isAnalyzing={isAnalyzing}
-        isSpeaking={isSpeaking}
-        onMuteSpeech={handleMuteSpeech}
-      />
+      {isAuthenticated && (
+        <GlobalVoiceTrigger
+          activeMode={activeMode}
+          onModeChange={handleModeChange}
+          onTriggerScan={triggerGlobalVoiceScan}
+          onSendAssistantMessage={handleSendAssistantMessage}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          isAnalyzing={isAnalyzing}
+          isSpeaking={isSpeaking}
+          onMuteSpeech={handleMuteSpeech}
+          onLockSession={(type) => {
+            handleLockSession(type);
+          }}
+        />
+      )}
 
     </div>
   );
