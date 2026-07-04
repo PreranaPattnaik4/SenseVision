@@ -31,16 +31,11 @@ interface VoiceIdentityCardProps {
   rememberCompanionChoice: boolean;
   useCloudVoice: boolean;
   onShowCompanionSelection: (show: boolean) => void;
-  onAuthSuccess?: () => void;
-  onLockSession?: (type?: 'normal' | 'disconnect') => void;
-  isAuthenticated?: boolean;
-  autoStartTrigger?: 'normal' | 'disconnect' | boolean;
 }
 
 enum AuthState {
   LOCKED = 'LOCKED',
   PROMPTING = 'PROMPTING',
-  PREPARING = 'PREPARING',
   LISTENING = 'LISTENING',
   VERIFYING = 'VERIFYING',
   SUCCESS = 'SUCCESS',
@@ -58,18 +53,11 @@ export default function VoiceIdentityCard({
   selectedCompanion,
   rememberCompanionChoice,
   useCloudVoice,
-  onShowCompanionSelection,
-  onAuthSuccess,
-  onLockSession,
-  isAuthenticated = false,
-  autoStartTrigger = false
+  onShowCompanionSelection
 }: VoiceIdentityCardProps) {
   // Authentication states
-  const [authState, setAuthState] = useState<AuthState>(
-    isAuthenticated ? AuthState.SUCCESS : AuthState.LOCKED
-  );
+  const [authState, setAuthState] = useState<AuthState>(AuthState.LOCKED);
   const [recognizedText, setRecognizedText] = useState("");
-  const [prepCountdown, setPrepCountdown] = useState(10);
   const [biometricMetrics, setBiometricMetrics] = useState({
     pitch: 0,
     spectralFlux: 0,
@@ -78,7 +66,7 @@ export default function VoiceIdentityCard({
   });
   
   // Continuous Conversation state
-  const [companionActive, setCompanionActive] = useState(isAuthenticated);
+  const [companionActive, setCompanionActive] = useState(false);
   const [companionStatus, setCompanionStatus] = useState<'Idle' | 'Listening...' | 'Speaking...' | 'Thinking...'>('Idle');
   const [isPaused, setIsPaused] = useState(false);
   const [speechRecognition, setSpeechRecognition] = useState<any | null>(null);
@@ -86,59 +74,12 @@ export default function VoiceIdentityCard({
   const [lastCompanionResponse, setLastCompanionResponse] = useState("");
   const [showExplanation, setShowExplanation] = useState(false);
 
-  // Timers and Refs for Auth Flow
-  const authTimeoutRef = useRef<any>(null);
-  const countdownIntervalRef = useRef<any>(null);
-  const listeningSessionActiveRef = useRef<boolean>(false);
-  const listeningSessionStartTimeRef = useRef<number>(0);
-  const hasReceivedSpeechResultRef = useRef<boolean>(false);
-
-  // Sync authState when isAuthenticated changes from App
-  useEffect(() => {
-    if (isAuthenticated) {
-      setAuthState(AuthState.SUCCESS);
-      setCompanionActive(true);
-    } else {
-      setAuthState(AuthState.LOCKED);
-      setCompanionActive(false);
-    }
-  }, [isAuthenticated]);
-
-  // Handle auto-start trigger for welcome screen
-  useEffect(() => {
-    if (autoStartTrigger && authState === AuthState.LOCKED) {
-      if (autoStartTrigger === 'disconnect') {
-        activateDisconnectVoiceIdentity();
-      } else {
-        activateVoiceIdentity();
-      }
-    }
-  }, [autoStartTrigger]);
-
   // Registered voice parameters
-  const [registeredPassphrase, setRegisteredPassphrase] = useState("Hello SenseVision, let's begin.");
+  const [registeredPassphrase, setRegisteredPassphrase] = useState("Hello SensevVision, let's begin.");
   const [forceVoiceMismatch, setForceVoiceMismatch] = useState(false); // Testing toggle
   
   const authRecognitionRef = useRef<any>(null);
   const continuousRecognitionRef = useRef<any>(null);
-
-  const cleanupAuthTimersAndSpeech = () => {
-    cancelSpeech();
-    if (authTimeoutRef.current) {
-      clearTimeout(authTimeoutRef.current);
-      authTimeoutRef.current = null;
-    }
-    if (countdownIntervalRef.current) {
-      clearInterval(countdownIntervalRef.current);
-      countdownIntervalRef.current = null;
-    }
-    listeningSessionActiveRef.current = false;
-    if (authRecognitionRef.current) {
-      try {
-        authRecognitionRef.current.stop();
-      } catch (e) {}
-    }
-  };
 
   // Initialize Speech Recognition for Authentication
   useEffect(() => {
@@ -157,13 +98,6 @@ export default function VoiceIdentityCard({
         rec.onresult = (event: any) => {
           const text = event.results[0][0].transcript;
           if (text) {
-            hasReceivedSpeechResultRef.current = true;
-            // Stop the 15-second session
-            listeningSessionActiveRef.current = false;
-            if (authTimeoutRef.current) {
-              clearTimeout(authTimeoutRef.current);
-              authTimeoutRef.current = null;
-            }
             setRecognizedText(text);
             runVerification(text);
           }
@@ -171,35 +105,14 @@ export default function VoiceIdentityCard({
 
         rec.onerror = (e: any) => {
           console.warn("Auth voice recognition error:", e);
-          if (e.error === 'not-allowed') {
-            cleanupAuthTimersAndSpeech();
-            setAuthState(AuthState.LOCKED);
-            speakText("I'm sorry. Microphone permission is required to verify your voice identity.", false);
-          }
-        };
-
-        rec.onend = () => {
-          // If the listening session is still active and we haven't received a result, restart the mic
-          if (listeningSessionActiveRef.current && !hasReceivedSpeechResultRef.current) {
-            const elapsed = Date.now() - listeningSessionStartTimeRef.current;
-            if (elapsed < 14000) {
-              try {
-                rec.start();
-              } catch (err) {
-                console.warn("Failed to restart SpeechRecognition during 15s session:", err);
-              }
-            }
-          }
+          playChime('alert');
+          setAuthState(AuthState.FAILED_PASSPHRASE);
+          speakText("Speech not recognized or timed out. Please try again.", false);
         };
 
         authRecognitionRef.current = rec;
       }
     }
-
-    return () => {
-      if (authTimeoutRef.current) clearTimeout(authTimeoutRef.current);
-      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-    };
   }, [forceVoiceMismatch, registeredPassphrase]);
 
   // Handle continuous companion state updates based on App and speaking/thinking states
@@ -233,140 +146,35 @@ export default function VoiceIdentityCard({
   }, [assistantMessages]);
 
   // Handle Voice Identity activation press
-  const activateVoiceIdentity = async () => {
-    cleanupAuthTimersAndSpeech();
+  const activateVoiceIdentity = () => {
+    cancelSpeech();
     playChime('click');
     setAuthState(AuthState.PROMPTING);
     
-    try {
-      // If microphone permission has not been granted, request permission
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch (err) {
-      console.warn("Microphone permission denied:", err);
-      setAuthState(AuthState.LOCKED);
-      speakText("I'm sorry. Microphone permission is required to verify your voice identity.", false);
-      return;
-    }
+    // Speak welcome prompt
+    const promptMessage = "Welcome to SensevVision. Please say your voice passphrase.";
+    speakText(promptMessage, false);
 
-    // Step 1: Speak: "To continue using SenseVision, please verify your voice identity."
-    const announcement1 = "To continue using SenseVision, please verify your voice identity.";
-    speakText(announcement1, false, undefined, undefined, () => {
-      // Step 2: Enter 10-second preparation period
-      setAuthState(AuthState.PREPARING);
-      setPrepCountdown(10);
-      
-      let count = 10;
-      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-      countdownIntervalRef.current = setInterval(() => {
-        count--;
-        setPrepCountdown(count);
-        if (count <= 0) {
-          clearInterval(countdownIntervalRef.current);
-          countdownIntervalRef.current = null;
-          
-          // Step 3: Speak: "I'm ready to verify your identity. Please say your registered passphrase when you're ready."
-          const announcement2 = "I'm ready to verify your identity. Please say your registered passphrase when you're ready.";
-          setAuthState(AuthState.PROMPTING);
-          speakText(announcement2, false, undefined, undefined, () => {
-            // Step 4: Automatically begin the 15-second listening session after the announcement finishes speaking
-            startAuthMic15SecSession();
-          });
-        }
-      }, 1000);
-    });
+    // Wait until the speech finishes before starting microphone (approx 3.8s)
+    setTimeout(() => {
+      startAuthMic();
+    }, 3800);
   };
 
-  // Special disconnect lock and authentication activation sequence
-  const activateDisconnectVoiceIdentity = async () => {
-    cleanupAuthTimersAndSpeech();
-    setAuthState(AuthState.PROMPTING);
-    
-    try {
-      // If microphone permission has not been granted, request permission
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch (err) {
-      console.warn("Microphone permission denied:", err);
-      setAuthState(AuthState.LOCKED);
-    }
-
-    // Step 1: Speak: "Your Sense Companion has been disconnected."
-    speakText("Your Sense Companion has been disconnected.", false, undefined, undefined, async () => {
-      // Step 2: Wait 2 seconds
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Step 3: Speak: "For your privacy and security, SenseVision has been locked."
-      speakText("For your privacy and security, SenseVision has been locked.", false, undefined, undefined, async () => {
-        // Step 4: Wait 2 seconds
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // Step 5: Speak: "To continue using SenseVision, please verify your voice identity."
-        const promptText = "To continue using SenseVision, please verify your voice identity.";
-        speakText(promptText, false, undefined, undefined, () => {
-          // Step 6: Enter 10-second preparation period
-          setAuthState(AuthState.PREPARING);
-          setPrepCountdown(10);
-          
-          let count = 10;
-          if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-          countdownIntervalRef.current = setInterval(() => {
-            count--;
-            setPrepCountdown(count);
-            if (count <= 0) {
-              clearInterval(countdownIntervalRef.current);
-              countdownIntervalRef.current = null;
-              
-              // Step 7: Speak: "I'm ready to verify your identity. Please say your registered passphrase when you're ready."
-              const finalPrompt = "I'm ready to verify your identity. Please say your registered passphrase when you're ready.";
-              setAuthState(AuthState.PROMPTING);
-              speakText(finalPrompt, false, undefined, undefined, () => {
-                // Step 8: Only after the announcement finishes, automatically begin the 15-second listening session
-                startAuthMic15SecSession();
-              });
-            }
-          }, 1000);
-        });
-      });
-    });
-  };
-
-  // Start Auth Mic (15-second listening session)
-  const startAuthMic15SecSession = () => {
+  // Start Auth Mic
+  const startAuthMic = () => {
     if (!authRecognitionRef.current) {
       speakText("Speech recognition is not supported in this environment.", false);
       setAuthState(AuthState.LOCKED);
       return;
     }
-
-    cleanupAuthTimersAndSpeech();
-    setAuthState(AuthState.LISTENING);
-    playChime('click');
-
-    listeningSessionActiveRef.current = true;
-    listeningSessionStartTimeRef.current = Date.now();
-    hasReceivedSpeechResultRef.current = false;
-
     try {
+      setAuthState(AuthState.LISTENING);
+      playChime('click');
       authRecognitionRef.current.start();
     } catch (e) {
       console.error("Error starting speech recognition:", e);
     }
-
-    // Keep the microphone active for 15 seconds to allow the user to speak comfortably.
-    authTimeoutRef.current = setTimeout(() => {
-      if (listeningSessionActiveRef.current && !hasReceivedSpeechResultRef.current) {
-        listeningSessionActiveRef.current = false;
-        try {
-          authRecognitionRef.current.stop();
-        } catch (e) {}
-
-        // If no speech is detected, say:
-        // "I didn't hear anything. Take your time. Please try again when you're ready."
-        speakText("I didn't hear anything. Take your time. Please try again when you're ready.", false, undefined, undefined, () => {
-          // Then automatically begin another 15-second listening session.
-          startAuthMic15SecSession();
-        });
-      }
-    }, 15000);
   };
 
   // Run Biometric & Passphrase Verification Sim
@@ -407,46 +215,45 @@ export default function VoiceIdentityCard({
         if (!isPassphraseMatch) {
           setAuthState(AuthState.FAILED_PASSPHRASE);
           playChime('alert');
-          speakText("I'm sorry. I couldn't verify your voice. Please try again.", false);
+          speakText("The passphrase did not match. Please try again.", false);
         } else if (forceVoiceMismatch) {
           setAuthState(AuthState.FAILED_VOICE);
           playChime('alert');
-          speakText("I'm sorry. I couldn't verify your voice. Please try again.", false);
+          speakText("Voice identity could not be verified. Please try again.", false);
         } else {
           setAuthState(AuthState.SUCCESS);
           playChime('success');
           
-          if (onAuthSuccess) {
-            onAuthSuccess();
-          }
-
-          setCompanionActive(true);
-          onVerificationSuccess(true);
-          onShowCompanionSelection(false);
-          
-          let companionGreeting = "";
-          if (selectedCompanion === 'Emma') {
-            companionGreeting = "Welcome back. Voice identity verified successfully. I'm Emma, your Sense Companion. I'm ready to help. How may I assist you today?";
-          } else if (selectedCompanion === 'Alex') {
-            companionGreeting = "Welcome back. Voice identity verified successfully. I'm Alex, your Sense Companion. How may I assist you today?";
-          } else if (selectedCompanion === 'Maya') {
-            companionGreeting = "Welcome back. Voice identity verified successfully. I'm Maya, your Sense Companion. Let me guide you with warm Indian English assistance. How may I assist you today?";
-          } else if (selectedCompanion === 'Arjun') {
-            companionGreeting = "Welcome back. Voice identity verified successfully. I'm Arjun, your Sense Companion. I am ready to help you navigate your environments safely. How may I assist you today?";
-          } else if (selectedCompanion === 'Sophia') {
-            companionGreeting = "Welcome back. Voice identity verified successfully. I'm Sophia, your Sense Companion. Te ayudaré a entender tu entorno de manera clara. How may I assist you today?";
-          } else if (selectedCompanion === 'Kenji') {
-            companionGreeting = "Welcome back. Voice identity verified successfully. I'm Kenji, your Sense Companion. あなたの視覚情報を日本語でサポートします。 How may I assist you today?";
+          if (rememberCompanionChoice && selectedCompanion) {
+            setCompanionActive(true);
+            onVerificationSuccess(true);
+            onShowCompanionSelection(false);
+            
+            let companionGreeting = `Hello! I'm ${selectedCompanion}, your Sense Companion. How may I help you today?`;
+            if (selectedCompanion === 'Alex') {
+              companionGreeting = `Hello! I'm ${selectedCompanion}, your Sense Companion. What would you like to explore today?`;
+            } else if (selectedCompanion === 'Maya') {
+              companionGreeting = "Namaste! I'm Maya, your Sense Companion. Let me guide you with warm Indian English assistance.";
+            } else if (selectedCompanion === 'Arjun') {
+              companionGreeting = "Hello there, I'm Arjun, your Sense Companion. I am ready to help you navigate your environments safely.";
+            } else if (selectedCompanion === 'Sophia') {
+              companionGreeting = "Hola, soy Sophia, tu compañera de Sense Companion. Te ayudaré a entender tu entorno de manera clara.";
+            } else if (selectedCompanion === 'Kenji') {
+              companionGreeting = "こんにちは、ケンジです。あなたの視覚情報を日本語でサポートします。";
+            }
+            
+            speakText(
+              `Voice verified successfully. ${companionGreeting}`, 
+              useCloudVoice,
+              undefined,
+              selectedCompanion
+            );
           } else {
-            companionGreeting = `Welcome back. Voice identity verified successfully. I'm ${selectedCompanion}, your Sense Companion. I'm ready to help. How may I assist you today?`;
+            setCompanionActive(false);
+            onVerificationSuccess(false);
+            onShowCompanionSelection(true);
+            speakText("Voice verified successfully.", useCloudVoice, undefined, selectedCompanion);
           }
-          
-          speakText(
-            companionGreeting, 
-            useCloudVoice,
-            undefined,
-            selectedCompanion
-          );
         }
       }
     }, 850);
@@ -523,8 +330,10 @@ export default function VoiceIdentityCard({
   const handleContinuousInput = (rawText: string) => {
     const text = rawText.trim().toLowerCase();
     
-    if (text === "stop" || text === "goodbye" || text === "exit" || text === "end conversation" || text.includes("lock sensevision") || text.includes("end session")) {
+    if (text === "stop" || text === "goodbye" || text === "exit" || text === "end conversation") {
+      playChime('alert');
       endConversation();
+      speakText("Ending continuous voice companion. Goodbye.", false);
       return;
     }
 
@@ -556,9 +365,6 @@ export default function VoiceIdentityCard({
     setAuthState(AuthState.LOCKED);
     setIsPaused(false);
     setRecognizedText("");
-    if (onLockSession) {
-      onLockSession('disconnect');
-    }
   };
 
   // Replay last spoken response
@@ -572,122 +378,110 @@ export default function VoiceIdentityCard({
   };
 
   return (
-    <div className="w-full animate-fade-in relative" id="voice-identity-card-wrapper">
+    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow" id="voice-identity-card-wrapper">
       
-      <div className="space-y-4 pt-1">
+      {/* Decorative Top Bar */}
+      <div className="bg-gradient-to-r from-blue-600 to-blue-400 h-1 w-full"></div>
+
+      <div className="p-6 space-y-5">
         
         {/* Header Block */}
-        <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
-          <div className="space-y-0.5 text-left">
-            <div className="flex items-center space-x-1.5">
-              <span className="p-0.5 rounded bg-blue-50 text-blue-600">
-                <Radio className="w-3.5 h-3.5 animate-pulse" />
+        <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+          <div className="space-y-1 text-left">
+            <div className="flex items-center space-x-2">
+              <span className="p-1 rounded bg-blue-50 text-blue-600">
+                <Radio className="w-4 h-4 animate-pulse" />
               </span>
-              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider font-mono">
+              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider font-mono">
                 🎙️ Voice Identity & Security
               </h3>
             </div>
-            <p className="text-[10px] text-slate-500 leading-normal max-w-xl font-normal">
-              Securely activate your personal AI companion using your registered voice for hands-free conversational controls.
+            <p className="text-xs text-slate-500 leading-normal max-w-xl font-normal">
+              Securely activate your personal AI companion using your registered voice. This ensures seamless visual guidance and hands-free conversational controls.
             </p>
           </div>
- 
+
           {/* Status Badge */}
-          <div className="shrink-0 pt-0.5">
+          <div className="shrink-0">
             {authState === AuthState.LOCKED && (
-              <span className="bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase tracking-wider inline-flex items-center space-x-1">
-                <Lock className="w-2.5 h-2.5 text-red-500 mr-1 shrink-0" />
+              <span className="bg-slate-100 text-slate-600 border border-slate-200 px-3 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider inline-flex items-center space-x-1">
+                <Lock className="w-3 h-3 text-red-500 mr-1 shrink-0" />
                 <span>🔒 LOCKED</span>
               </span>
             )}
             
             {(authState === AuthState.PROMPTING || authState === AuthState.LISTENING) && (
-              <span className="bg-blue-50 text-blue-600 border border-blue-100 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase tracking-wider inline-flex items-center space-x-1 animate-pulse">
-                <Mic className="w-2.5 h-2.5 text-blue-600 mr-1 shrink-0" />
+              <span className="bg-blue-50 text-blue-600 border border-blue-100 px-3 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider inline-flex items-center space-x-1 animate-pulse">
+                <Mic className="w-3 h-3 text-blue-600 mr-1 shrink-0" />
                 <span>LISTENING...</span>
               </span>
             )}
- 
+
             {authState === AuthState.VERIFYING && (
-              <span className="bg-blue-50 text-blue-600 border border-blue-100 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase tracking-wider inline-flex items-center space-x-1">
-                <RefreshCw className="w-2.5 h-2.5 mr-1 shrink-0 animate-spin text-blue-600" />
+              <span className="bg-blue-50 text-blue-600 border border-blue-100 px-3 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider inline-flex items-center space-x-1">
+                <RefreshCw className="w-3 h-3 mr-1 shrink-0 animate-spin text-blue-600" />
                 <span>🧠 VERIFYING...</span>
               </span>
             )}
- 
+
             {authState === AuthState.SUCCESS && (
-              <span className="bg-emerald-50 text-emerald-600 border border-emerald-100 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase tracking-wider inline-flex items-center space-x-1">
-                <Unlock className="w-2.5 h-2.5 text-emerald-600 mr-1 shrink-0" />
+              <span className="bg-emerald-50 text-emerald-600 border border-emerald-100 px-3 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider inline-flex items-center space-x-1">
+                <Unlock className="w-3 h-3 text-emerald-600 mr-1 shrink-0" />
                 <span>✅ VERIFIED</span>
               </span>
             )}
- 
+
             {(authState === AuthState.FAILED_PASSPHRASE || authState === AuthState.FAILED_VOICE) && (
-              <span className="bg-red-50 text-red-600 border border-red-100 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase tracking-wider inline-flex items-center space-x-1">
-                <ShieldAlert className="w-2.5 h-2.5 text-red-600 mr-1 shrink-0" />
+              <span className="bg-red-50 text-red-600 border border-red-100 px-3 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider inline-flex items-center space-x-1">
+                <ShieldAlert className="w-3 h-3 text-red-600 mr-1 shrink-0" />
                 <span>FAILED</span>
               </span>
             )}
           </div>
         </div>
- 
-        {/* Hackathon Evaluation Banner for Judges */}
-        {authState !== AuthState.SUCCESS && (
-          <div className="bg-amber-50 border border-amber-250 p-2.5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between text-left gap-2">
-            <div className="space-y-0.5">
-              <span className="text-[9px] text-amber-800 font-mono uppercase font-bold tracking-wider flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                Demo Passphrase
-              </span>
-              <p className="text-[10px] font-mono font-bold text-slate-800 bg-white border border-amber-200/60 px-2 py-1 rounded-lg inline-block">
-                "{registeredPassphrase}"
-              </p>
-            </div>
-            <div className="text-[9px] text-slate-500 max-w-xs font-sans leading-tight">
-              Speak or simulate this phrase to verify.
-            </div>
-          </div>
-        )}
- 
+
         {/* Action Panel based on state */}
-        <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+        <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200">
           
           {authState === AuthState.LOCKED && (
-            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 py-0.5">
-              <div className="text-left space-y-1 w-full">
-                <span className="text-[9px] text-slate-400 font-mono uppercase tracking-widest block font-bold">Registered Phrase</span>
-                <span className="text-[11px] text-slate-800 font-bold bg-white border border-slate-200 px-3 py-1.5 rounded-xl block font-mono">
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-5 py-1">
+              <div className="text-left space-y-1.5 w-full">
+                <span className="text-[10px] text-slate-400 font-mono uppercase tracking-widest block font-bold">Registered Phrase</span>
+                <span className="text-xs text-slate-800 font-bold bg-white border border-slate-200 px-3.5 py-2 rounded-xl block font-mono">
                   "{registeredPassphrase}"
                 </span>
+                <p className="text-[10px] text-slate-500 italic mt-1 font-medium">
+                  💡 Tip: Speak this phrase exactly during the authentication test.
+                </p>
               </div>
               
-              <div className="flex flex-col gap-1.5 shrink-0 w-full sm:w-auto">
+              <div className="flex flex-col gap-2 shrink-0 w-full sm:w-auto">
                 <button
                   id="activate-voice-id-btn"
                   onClick={activateVoiceIdentity}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold text-[11px] uppercase tracking-wider transition-all inline-flex items-center justify-center space-x-1.5 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600 cursor-pointer"
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all inline-flex items-center justify-center space-x-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
                 >
-                  <Mic className="w-3.5 h-3.5" />
-                  <span>Verify Identity</span>
+                  <Mic className="w-4 h-4" />
+                  <span>Activate Voice Identity</span>
                 </button>
                 
                 {/* Visual Testing Helpers */}
-                <div className="flex items-center justify-between gap-3 px-0.5">
-                  <label className="text-[9px] text-slate-500 font-mono uppercase cursor-pointer flex items-center font-semibold">
+                <div className="flex items-center justify-between px-1 mt-1">
+                  <label className="text-[10px] text-slate-500 font-mono uppercase cursor-pointer flex items-center font-semibold">
                     <input
                       type="checkbox"
                       checked={forceVoiceMismatch}
                       onChange={(e) => setForceVoiceMismatch(e.target.checked)}
-                      className="mr-1 rounded bg-white border-slate-350 text-blue-600 focus:ring-blue-500"
+                      className="mr-1.5 rounded bg-white border-slate-350 text-blue-600 focus:ring-blue-500"
                     />
-                    Simulate Mismatch
+                    Simulate Voice Mismatch
                   </label>
                   <button
                     onClick={() => setShowExplanation(!showExplanation)}
-                    className="text-[9px] text-slate-500 hover:text-blue-600 underline font-mono flex items-center font-semibold cursor-pointer"
+                    className="text-[10px] text-slate-500 hover:text-blue-600 underline font-mono flex items-center font-semibold"
                   >
-                    <Info className="w-2.5 h-2.5 mr-0.5" />
-                    Info
+                    <Info className="w-3 h-3 mr-0.5" />
+                    How it works
                   </button>
                 </div>
               </div>
@@ -695,60 +489,17 @@ export default function VoiceIdentityCard({
           )}
 
           {authState === AuthState.PROMPTING && (
-            <div className="text-center py-6 space-y-4">
+            <div className="text-center py-4 space-y-3">
               <div className="flex justify-center space-x-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-ping"></span>
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping"></span>
+                <span className="w-2 h-2 rounded-full bg-blue-600"></span>
               </div>
-              <p className="text-sm text-slate-800 font-semibold max-w-md mx-auto leading-relaxed">
-                Reading voice guidance instructions aloud...
+              <p className="text-xs text-slate-700 italic font-mono font-semibold">
+                "Welcome to SensevVision. Please say your voice passphrase."
               </p>
-              <p className="text-[10px] text-slate-400 font-mono uppercase tracking-widest font-extrabold bg-white border border-slate-200 px-3 py-1.5 rounded-full inline-block">
-                🔊 Audio Announcement Playing
+              <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">
+                Preparing Accessible Microphone...
               </p>
-              <div className="pt-2">
-                <button
-                  onClick={() => {
-                    cleanupAuthTimersAndSpeech();
-                    setAuthState(AuthState.LOCKED);
-                    playChime('alert');
-                  }}
-                  className="text-[10px] text-slate-500 hover:text-blue-600 uppercase font-mono underline font-bold"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-
-          {authState === AuthState.PREPARING && (
-            <div className="text-center py-6 space-y-4">
-              <div className="flex justify-center items-center space-x-3">
-                <div className="h-10 w-10 bg-slate-150 text-slate-500 rounded-full flex items-center justify-center border border-slate-200 shadow-sm animate-pulse">
-                  <MicOff className="w-5 h-5 text-slate-600" />
-                </div>
-                <span className="text-3xl font-black text-blue-600 font-mono leading-none">{prepCountdown}s</span>
-              </div>
-              <div className="space-y-1">
-                <p className="text-sm font-bold text-slate-800 uppercase tracking-wide">
-                  Preparing Voice Authentication…
-                </p>
-                <p className="text-xs text-slate-500 max-w-xs mx-auto">
-                  Microphone is strictly OFF. Please prepare to speak your registered passphrase.
-                </p>
-              </div>
-              <div className="pt-2">
-                <button
-                  onClick={() => {
-                    cleanupAuthTimersAndSpeech();
-                    setAuthState(AuthState.LOCKED);
-                    playChime('alert');
-                  }}
-                  className="text-[10px] text-slate-500 hover:text-blue-600 uppercase font-mono underline font-bold"
-                >
-                  Cancel Preparation
-                </button>
-              </div>
             </div>
           )}
 
@@ -756,25 +507,25 @@ export default function VoiceIdentityCard({
             <div className="text-center py-6 space-y-4">
               {/* Pulsating wave visualizer */}
               <div className="flex items-center justify-center space-x-1.5 h-8">
-                <span className="w-1 h-4 bg-emerald-500 rounded animate-pulse" style={{ animationDelay: '0.1s' }}></span>
-                <span className="w-1 h-7 bg-emerald-500 rounded animate-pulse" style={{ animationDelay: '0.2s' }}></span>
-                <span className="w-1 h-5 bg-emerald-500 rounded animate-pulse" style={{ animationDelay: '0.3s' }}></span>
-                <span className="w-1 h-8 bg-emerald-500 rounded animate-pulse" style={{ animationDelay: '0.4s' }}></span>
-                <span className="w-1 h-3 bg-emerald-500 rounded animate-pulse" style={{ animationDelay: '0.5s' }}></span>
+                <span className="w-1 h-4 bg-blue-600 rounded animate-pulse" style={{ animationDelay: '0.1s' }}></span>
+                <span className="w-1 h-7 bg-blue-600 rounded animate-pulse" style={{ animationDelay: '0.2s' }}></span>
+                <span className="w-1 h-5 bg-blue-600 rounded animate-pulse" style={{ animationDelay: '0.3s' }}></span>
+                <span className="w-1 h-8 bg-blue-600 rounded animate-pulse" style={{ animationDelay: '0.4s' }}></span>
+                <span className="w-1 h-3 bg-blue-600 rounded animate-pulse" style={{ animationDelay: '0.5s' }}></span>
               </div>
 
-              <div className="space-y-1.5">
-                <span className="text-[10px] font-mono text-emerald-600 font-bold uppercase tracking-wider animate-pulse block">
-                  🎤 Listening for your registered passphrase…
+              <div className="space-y-1">
+                <span className="text-[10px] font-mono text-blue-600 font-bold uppercase tracking-wider animate-pulse block">
+                  🎤 Microphones Active - Speak Now
                 </span>
                 <p className="text-xs text-slate-700 font-bold max-w-sm mx-auto">
-                  Say: <span className="text-emerald-700 font-mono font-bold bg-white border border-slate-250 px-2 py-1 rounded">"{registeredPassphrase}"</span>
+                  Say: <span className="text-blue-700 font-mono font-bold bg-white border border-slate-250 px-2 py-1 rounded">"{registeredPassphrase}"</span>
                 </p>
               </div>
 
               <button
                 onClick={() => {
-                  cleanupAuthTimersAndSpeech();
+                  if (authRecognitionRef.current) authRecognitionRef.current.stop();
                   setAuthState(AuthState.LOCKED);
                   playChime('alert');
                 }}

@@ -1,4 +1,4 @@
-// Audio feedback utility for SenseVision
+// Audio feedback utility for SensevVision
 
 let currentAudio: HTMLAudioElement | null = null;
 
@@ -8,15 +8,13 @@ let currentAudio: HTMLAudioElement | null = null;
  * @param useCloudVoice Whether to request server-side Gemini TTS
  * @param voiceName The voice character to use for Gemini (Kore, Fenrir, Zephyr, Puck, Charon)
  * @param companionOverride Optional companion name override
- * @param onEnd Optional callback triggered when speech completes
- * @returns Promise that resolves when audio completes playing
+ * @returns Promise that resolves when audio starts playing
  */
 export async function speakText(
   text: string, 
   useCloudVoice: boolean = false, 
   voiceName: string = 'Kore',
-  companionOverride?: string,
-  onEnd?: () => void
+  companionOverride?: string
 ): Promise<void> {
   // Cancel any ongoing speech first
   cancelSpeech();
@@ -27,10 +25,7 @@ export async function speakText(
     .replace(/\[.*?\]/g, '')
     .trim();
 
-  if (!cleanText) {
-    if (onEnd) onEnd();
-    return;
-  }
+  if (!cleanText) return;
 
   // Determine active companion preference
   let activeCompanion = companionOverride;
@@ -81,18 +76,7 @@ export async function speakText(
       if (data.audio) {
         const audioUri = `data:audio/mp3;base64,${data.audio}`;
         currentAudio = new Audio(audioUri);
-        await new Promise<void>((resolve, reject) => {
-          if (!currentAudio) return reject("No audio");
-          currentAudio.onended = () => {
-            resolve();
-            if (onEnd) onEnd();
-          };
-          currentAudio.onerror = (e) => {
-            reject(e);
-            if (onEnd) onEnd();
-          };
-          currentAudio.play().catch(reject);
-        });
+        await currentAudio.play();
         return;
       } else {
         throw new Error("No audio payload received from server");
@@ -100,30 +84,19 @@ export async function speakText(
     } catch (error) {
       console.warn("Cloud TTS failed, falling back to Native speech synthesis:", error);
       // Fallback to native voice
-      return new Promise<void>((resolve) => {
-        speakNative(cleanText, activeCompanion, () => {
-          resolve();
-          if (onEnd) onEnd();
-        });
-      });
+      speakNative(cleanText, activeCompanion);
     }
   } else {
-    return new Promise<void>((resolve) => {
-      speakNative(cleanText, activeCompanion, () => {
-        resolve();
-        if (onEnd) onEnd();
-      });
-    });
+    speakNative(cleanText, activeCompanion);
   }
 }
 
 /**
  * Native Speech Synthesis fallback
  */
-function speakNative(text: string, companion: string = 'Emma', onEnd?: () => void): void {
+function speakNative(text: string, companion: string = 'Emma'): void {
   if (typeof window === 'undefined' || !window.speechSynthesis) {
     console.error("Speech synthesis is not supported in this browser.");
-    if (onEnd) onEnd();
     return;
   }
 
@@ -131,15 +104,6 @@ function speakNative(text: string, companion: string = 'Emma', onEnd?: () => voi
   window.speechSynthesis.cancel();
 
   const utterance = new SpeechSynthesisUtterance(text);
-  
-  if (onEnd) {
-    utterance.onend = () => {
-      onEnd();
-    };
-    utterance.onerror = () => {
-      onEnd();
-    };
-  }
   
   // Try to find a pleasant English voice matching gender/style
   const voices = window.speechSynthesis.getVoices();

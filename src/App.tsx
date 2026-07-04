@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-const logoImage = "https://www.dropbox.com/scl/fi/4pluub1fokqdrf3ovrvdf/a1ffdb5f-507f-4469-b502-50f48b90fe24.png?rlkey=cwo5zpluoadchv9hp4h0amjhr&st=wx16wfee&raw=1";
 import { 
   Camera, 
   Sparkles, 
@@ -20,9 +19,7 @@ import {
   Info,
   ChevronRight,
   Clipboard,
-  Play,
-  Lock,
-  Mic
+  Play
 } from 'lucide-react';
 
 import { AppMode, VisionLog, AssistantMessage, AnalysisResponse, AssistanceStyle, PresetEnvironment } from './types';
@@ -38,22 +35,6 @@ import { PRESET_ENVIRONMENTS } from './utils/presets';
 import { speakText, cancelSpeech, playChime } from './utils/audio';
 
 export default function App() {
-  // Authentication & Security Locks
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [voiceAuthActive, setVoiceAuthActive] = useState(false);
-  const [authTriggerType, setAuthTriggerType] = useState<'normal' | 'disconnect' | null>(null);
-
-  const handleLockSession = (type?: 'normal' | 'disconnect') => {
-    setIsAuthenticated(false);
-    if (type === 'disconnect') {
-      setVoiceAuthActive(true);
-      setAuthTriggerType('disconnect');
-    } else {
-      setVoiceAuthActive(false);
-      setAuthTriggerType(null);
-    }
-  };
-
   // Navigation & Screen Modes
   const [activeMode, setActiveMode] = useState<AppMode>(AppMode.OBJECT_RECOGNITION);
   const [inputType, setInputType] = useState<'camera' | 'simulator'>('simulator');
@@ -95,10 +76,7 @@ export default function App() {
 
   // Initialize and load historical logs from LocalStorage
   useEffect(() => {
-    // Ensure the page always starts at the top of the application upon mount or refresh
-    window.scrollTo(0, 0);
-
-    const savedLogs = localStorage.getItem('sensevision_logs');
+    const savedLogs = localStorage.getItem('sensevvision_logs');
     if (savedLogs) {
       try {
         setLogs(JSON.parse(savedLogs));
@@ -107,7 +85,7 @@ export default function App() {
       }
     }
 
-    const savedPrefs = localStorage.getItem('sensevision_prefs');
+    const savedPrefs = localStorage.getItem('sensevvision_prefs');
     if (savedPrefs) {
       try {
         const parsed = JSON.parse(savedPrefs);
@@ -122,16 +100,21 @@ export default function App() {
       }
     }
 
-    // Welcoming spoken guide is suppressed until successful voice identity authentication
+    // Welcoming spoken guide
+    playChime('success');
+    speakText(
+      "Welcome to SensevVision, your intelligent visual companion. Environment simulator is loaded and active. Use spacebar or tap items to start.", 
+      false
+    );
   }, []);
 
   // Save logs and preferences
   useEffect(() => {
-    localStorage.setItem('sensevision_logs', JSON.stringify(logs));
+    localStorage.setItem('sensevvision_logs', JSON.stringify(logs));
   }, [logs]);
 
   useEffect(() => {
-    localStorage.setItem('sensevision_prefs', JSON.stringify({
+    localStorage.setItem('sensevvision_prefs', JSON.stringify({
       useCloudVoice,
       selectedVoice,
       largeTouchTargets,
@@ -414,7 +397,7 @@ export default function App() {
 
   const clearAllLogs = () => {
     setLogs([]);
-    localStorage.removeItem('sensevision_logs');
+    localStorage.removeItem('sensevvision_logs');
   };
 
   return (
@@ -428,43 +411,27 @@ export default function App() {
       {/* Top Accessible Header bar */}
       <header className="bg-white border-b border-slate-200 z-30 shadow-xs relative" id="main-navigation-header">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-28 sm:h-36">
+          <div className="flex justify-between items-center h-16">
             
             {/* Logo/Identity */}
-            <div className="flex items-center">
-              <img 
-                src={logoImage} 
-                alt="SenseVision - See Smarter, Live Freely" 
-                className="h-20 sm:h-28 w-auto object-contain" 
-                id="sensevision-brand-logo"
-              />
+            <div className="flex items-center space-x-3">
+              <div className="h-9 w-9 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-sm" id="sensevision-brand-badge">
+                <Accessibility className="w-5 h-5 font-bold" />
+              </div>
+              <div>
+                <span className="text-base font-extrabold tracking-tight text-slate-900 block">SenseVision</span>
+                <span className="text-[9px] text-blue-600 font-mono font-bold tracking-widest block -mt-1 uppercase">
+                  AI INDEPENDENT LIVING SIGHT
+                </span>
+              </div>
             </div>
 
             {/* Quick Speech Mute Buttons */}
             <div className="flex items-center space-x-3.5">
-              {!isAuthenticated ? (
-                <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
-                  <span className="inline-flex items-center space-x-1.5 bg-amber-50 px-2.5 py-1 rounded-full text-[10px] font-mono text-amber-700 border border-amber-200 font-bold">
-                    <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></span>
-                    <span>👁️ AI SIGHT SERVICE: STANDBY</span>
-                  </span>
-                  <span className="inline-flex items-center space-x-1.5 bg-red-50 px-2.5 py-1 rounded-full text-[10px] font-mono text-red-600 border border-red-200 font-bold">
-                    <span className="h-2 w-2 rounded-full bg-red-500"></span>
-                    <span>🔒 PERSONAL COMPANION LOCKED</span>
-                  </span>
-                </div>
-              ) : (
-                <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
-                  <span className="inline-flex items-center space-x-1.5 bg-emerald-50 px-2.5 py-1 rounded-full text-[10px] font-mono text-emerald-600 border border-emerald-200 font-bold">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span>👁️ AI SIGHT SERVICE: ONLINE</span>
-                  </span>
-                  <span className="inline-flex items-center space-x-1.5 bg-emerald-50 px-2.5 py-1 rounded-full text-[10px] font-mono text-emerald-600 border border-emerald-200 font-bold">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span>🟢 PERSONAL COMPANION ACTIVE</span>
-                  </span>
-                </div>
-              )}
+              <span className="hidden sm:inline-flex items-center space-x-1.5 bg-slate-50 px-3 py-1 rounded-full text-[10px] font-mono text-slate-500 border border-slate-200 font-bold">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>AI SIGHT SERVICE ACTIVE</span>
+              </span>
 
               {isSpeaking ? (
                 <button
@@ -495,57 +462,45 @@ export default function App() {
             <button
               id="tab-scan-selector"
               onClick={() => {
-                if (!isAuthenticated) return;
                 setActiveTab('scan');
                 playChime('click');
                 speakText("Switched to Scan and Companion mode.", false);
               }}
-              className={`px-4.5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all ${
-                !isAuthenticated ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
-              } ${
+              className={`px-4.5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer ${
                 activeTab === 'scan' 
                   ? 'bg-blue-600 text-white shadow-sm' 
                   : 'bg-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100'
               }`}
-              disabled={!isAuthenticated}
             >
               Scan & Sight
             </button>
             <button
               id="tab-logs-selector"
               onClick={() => {
-                if (!isAuthenticated) return;
                 setActiveTab('logs');
                 playChime('click');
                 speakText(`Auditory history logs. You have ${logs.length} previous scans saved.`, false);
               }}
-              className={`px-4.5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all ${
-                !isAuthenticated ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
-              } ${
+              className={`px-4.5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer ${
                 activeTab === 'logs' 
                   ? 'bg-blue-600 text-white shadow-sm' 
                   : 'bg-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100'
               }`}
-              disabled={!isAuthenticated}
             >
               Auditory Logs ({logs.length})
             </button>
             <button
               id="tab-prefs-selector"
               onClick={() => {
-                if (!isAuthenticated) return;
                 setActiveTab('preferences');
                 playChime('click');
                 speakText("Accessibility options. Modify cloud speech engines and visual touch settings.", false);
               }}
-              className={`px-4.5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all ${
-                !isAuthenticated ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
-              } ${
+              className={`px-4.5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer ${
                 activeTab === 'preferences' 
                   ? 'bg-blue-600 text-white shadow-sm' 
                   : 'bg-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100'
               }`}
-              disabled={!isAuthenticated}
             >
               A11y Preferences
             </button>
@@ -556,39 +511,30 @@ export default function App() {
       {/* Primary Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-8 z-10" id="primary-content-wrapper">
         
-        {isAuthenticated ? (
-          <>
-            {/* TAB 1: SCAN AND COMPANION */}
-            {activeTab === 'scan' && (
-              <div className="space-y-6">
-                
-                {/* Voice Identity Secure Card */}
-                <VoiceIdentityCard
-                  isAuthenticated={isAuthenticated}
-                  onVerificationSuccess={(active) => {
-                    setVoiceCompanionActive(active);
-                    if (active) {
-                      setActiveMode(AppMode.ASSISTANT);
-                    }
-                  }}
-                  onAuthSuccess={() => {
-                    setIsAuthenticated(true);
-                  }}
-                  onLockSession={(type) => {
-                    handleLockSession(type);
-                  }}
-                  onSendAssistantMessage={handleSendAssistantMessage}
-                  isAnalyzing={isAnalyzing || isAssistantResponding}
-                  isSpeaking={isSpeaking}
-                  assistantMessages={assistantMessages}
-                  onMuteSpeech={handleMuteSpeech}
-                  selectedCompanion={selectedCompanion}
-                  rememberCompanionChoice={rememberCompanionChoice}
-                  useCloudVoice={useCloudVoice}
-                  onShowCompanionSelection={(show) => {
-                    setShowCompanionSelector(show);
-                  }}
-                />
+        {/* TAB 1: SCAN AND COMPANION */}
+        {activeTab === 'scan' && (
+          <div className="space-y-6">
+            
+            {/* Voice Identity Secure Card */}
+            <VoiceIdentityCard
+              onVerificationSuccess={(active) => {
+                setVoiceCompanionActive(active);
+                if (active) {
+                  setActiveMode(AppMode.ASSISTANT);
+                }
+              }}
+              onSendAssistantMessage={handleSendAssistantMessage}
+              isAnalyzing={isAnalyzing || isAssistantResponding}
+              isSpeaking={isSpeaking}
+              assistantMessages={assistantMessages}
+              onMuteSpeech={handleMuteSpeech}
+              selectedCompanion={selectedCompanion}
+              rememberCompanionChoice={rememberCompanionChoice}
+              useCloudVoice={useCloudVoice}
+              onShowCompanionSelection={(show) => {
+                setShowCompanionSelector(show);
+              }}
+            />
 
             {/* Choose Your AI Companion Panel */}
             {showCompanionSelector && (
@@ -956,124 +902,6 @@ export default function App() {
           />
         )}
 
-          </>
-        ) : (
-          /* Render the Voice Identity & Security section inline as the primary focus */
-          <div className="max-w-4xl w-full mx-auto bg-white border border-slate-200 rounded-2xl shadow-md p-5 sm:p-6 relative animate-fade-in" id="secure-lock-content-wrapper">
-            {/* Decorative Top Bar */}
-            <div className="absolute top-0 inset-x-0 bg-gradient-to-r from-red-500 to-red-400 h-1.5 rounded-t-2xl"></div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-8 items-stretch text-left" id="secure-lock-grid-layout">
-              {/* Left Column: Branding (5 cols) */}
-              <div className="md:col-span-5 flex flex-col justify-between space-y-4 pt-1 border-b md:border-b-0 md:border-r border-slate-150 pb-5 md:pb-0 md:pr-6 lg:pr-8">
-                <div className="space-y-4">
-                  <div 
-                    className="bg-slate-50 p-2 rounded-xl shadow-xs hover:scale-105 transition-all duration-300 inline-flex items-center justify-center cursor-pointer active:scale-95"
-                    title="Click to Reload App"
-                    onClick={() => window.location.reload()}
-                  >
-                    <img 
-                      src={logoImage} 
-                      alt="SenseVision Logo" 
-                      className="h-10 w-auto object-contain"
-                      referrerPolicy="no-referrer"
-                      onError={(e) => {
-                        const img = e.currentTarget;
-                        if (!img.src.includes('?r=')) {
-                          img.src = `${logoImage}?r=${Date.now()}`;
-                        }
-                      }}
-                    />
-                  </div>
-                  
-                  <div className="space-y-1.5">
-                    <h1 className="text-2xl font-black text-slate-900 tracking-tight">SenseVision</h1>
-                    <p className="text-xs text-blue-600 font-extrabold tracking-wide">See Smarter. Live Freely.</p>
-                    <p className="text-[9px] text-slate-400 font-mono font-bold tracking-widest uppercase">
-                      INTELLIGENT VISUAL UNDERSTANDING
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <p className="text-[11px] text-slate-600 leading-relaxed font-sans">
-                    Welcome to SenseVision. Your personal AI companion is protected by Voice Identity Authentication. Please verify your identity to activate your Sense Companion.
-                  </p>
-                  <div className="pt-1">
-                    <span className="text-[8px] bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded-full font-mono font-bold inline-block">
-                      Powered by Google AI Technologies
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Column: Actions / Voice Auth Card (7 cols) */}
-              <div className="md:col-span-7 flex flex-col justify-center pl-0 md:pl-2">
-                {!voiceAuthActive ? (
-                  <div className="space-y-4 py-2 text-center md:text-left">
-                    <div className="inline-flex items-center space-x-1 bg-red-50 text-red-600 border border-red-100 px-3 py-1 rounded-full text-[9px] font-mono font-bold tracking-wider">
-                      <Lock className="w-3 h-3 mr-1 shrink-0 animate-pulse text-red-500" />
-                      <span>SECURE ACCESS REQUIRED</span>
-                    </div>
-                    
-                    <div className="space-y-1.5">
-                      <h2 className="text-sm font-extrabold text-slate-800 uppercase tracking-wide">
-                        Authentication Required
-                      </h2>
-                      <p className="text-xs text-slate-500 leading-relaxed font-sans">
-                        To access SenseVision's real-time multimodal assistance and live simulator environments, activate your Voice Identity now.
-                      </p>
-                    </div>
-
-                    <div className="pt-2">
-                      <button
-                        id="activate-voice-id-btn"
-                        onClick={() => {
-                          setAuthTriggerType('normal');
-                          setVoiceAuthActive(true);
-                        }}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 px-4 rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-md focus:outline-none focus:ring-2 focus:ring-blue-600 cursor-pointer flex items-center justify-center space-x-2"
-                      >
-                        <Mic className="w-4 h-4" />
-                        <span>Activate Voice Identity</span>
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-left animate-fade-in" id="voice-auth-container">
-                    <VoiceIdentityCard
-                      autoStartTrigger={authTriggerType || true}
-                      onVerificationSuccess={(active) => {
-                        setVoiceCompanionActive(active);
-                        if (active) {
-                          setActiveMode(AppMode.ASSISTANT);
-                        }
-                      }}
-                      onAuthSuccess={() => {
-                        setIsAuthenticated(true);
-                      }}
-                      onLockSession={(type) => {
-                        handleLockSession(type);
-                      }}
-                      onSendAssistantMessage={handleSendAssistantMessage}
-                      isAnalyzing={isAnalyzing || isAssistantResponding}
-                      isSpeaking={isSpeaking}
-                      assistantMessages={assistantMessages}
-                      onMuteSpeech={handleMuteSpeech}
-                      selectedCompanion={selectedCompanion}
-                      rememberCompanionChoice={rememberCompanionChoice}
-                      useCloudVoice={useCloudVoice}
-                      onShowCompanionSelection={(show) => {
-                        setShowCompanionSelector(show);
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
       </main>
 
       {/* Page Footer */}
@@ -1087,24 +915,19 @@ export default function App() {
       </footer>
 
       {/* Global Accessibility Voice Command Trigger */}
-      {isAuthenticated && (
-        <GlobalVoiceTrigger
-          activeMode={activeMode}
-          onModeChange={handleModeChange}
-          onTriggerScan={triggerGlobalVoiceScan}
-          onSendAssistantMessage={handleSendAssistantMessage}
-          inputType={inputType}
-          onInputTypeChange={setInputType}
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          isAnalyzing={isAnalyzing}
-          isSpeaking={isSpeaking}
-          onMuteSpeech={handleMuteSpeech}
-          onLockSession={(type) => {
-            handleLockSession(type);
-          }}
-        />
-      )}
+      <GlobalVoiceTrigger
+        activeMode={activeMode}
+        onModeChange={handleModeChange}
+        onTriggerScan={triggerGlobalVoiceScan}
+        onSendAssistantMessage={handleSendAssistantMessage}
+        inputType={inputType}
+        onInputTypeChange={setInputType}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        isAnalyzing={isAnalyzing}
+        isSpeaking={isSpeaking}
+        onMuteSpeech={handleMuteSpeech}
+      />
 
     </div>
   );
