@@ -243,6 +243,7 @@ export default function CameraScreen({ onCapture, isAnalyzing, activeModeLabel }
         aria-label="Upload source file drag or click selector"
       >
         <input 
+          id="camera-file-input"
           type="file" 
           ref={fileInputRef} 
           onChange={handleFileSelect} 
@@ -267,31 +268,42 @@ export default function CameraScreen({ onCapture, isAnalyzing, activeModeLabel }
           </p>
         </div>
 
-        <button
-          id="scan-trigger-btn"
-          disabled={isAnalyzing || (!stream && !capturedPreview)}
-          onClick={handleCapture}
-          className={`w-full sm:w-auto min-h-[52px] px-8 rounded-xl font-bold uppercase tracking-wider text-xs inline-flex items-center justify-center space-x-3 transition-all transform active:scale-95 cursor-pointer ${
-            isAnalyzing 
-              ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200' 
-              : (!stream && !capturedPreview)
-                ? 'bg-slate-50 text-slate-300 cursor-not-allowed border border-slate-100'
-                : 'bg-blue-600 hover:bg-blue-700 text-white hover:shadow-md focus:ring-4 focus:ring-blue-500/50 outline-none border border-blue-600 font-black'
-          }`}
-          aria-label={`Trigger Visual Scan for ${activeModeLabel}. Keyboard shortcut: Spacebar when focused.`}
-        >
-          {isAnalyzing ? (
-            <>
-              <RefreshCw className="w-4 h-4 animate-spin text-slate-400" />
-              <span>Analyzing visual field...</span>
-            </>
-          ) : (
-            <>
-              <Sparkles className="w-4 h-4" />
-              <span className="text-sm font-bold">TRIGGER VOICE SCAN</span>
-            </>
-          )}
-        </button>
+        <div className="flex flex-col sm:flex-row gap-2.5 w-full sm:w-auto">
+          <button
+            id="reset-camera-btn"
+            onClick={clearUploadedImage}
+            className="w-full sm:w-auto px-6 py-3 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs font-black uppercase tracking-wider transition-all cursor-pointer inline-flex items-center justify-center min-h-[52px]"
+            title="Reset camera and return to live feed"
+            aria-label="Reset camera and return to live feed"
+          >
+            Reset Camera
+          </button>
+          <button
+            id="scan-trigger-btn"
+            disabled={isAnalyzing || (!stream && !capturedPreview)}
+            onClick={handleCapture}
+            className={`w-full sm:w-auto min-h-[52px] px-8 rounded-xl font-bold uppercase tracking-wider text-xs inline-flex items-center justify-center space-x-3 transition-all transform active:scale-95 cursor-pointer ${
+              isAnalyzing 
+                ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200' 
+                : (!stream && !capturedPreview)
+                  ? 'bg-slate-50 text-slate-300 cursor-not-allowed border border-slate-100'
+                  : 'bg-blue-600 hover:bg-blue-700 text-white hover:shadow-md focus:ring-4 focus:ring-blue-500/50 outline-none border border-blue-600 font-black'
+            }`}
+            aria-label={`Trigger Visual Scan for ${activeModeLabel}. Keyboard shortcut: Spacebar when focused.`}
+          >
+            {isAnalyzing ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin text-slate-400" />
+                <span>Analyzing visual field...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4" />
+                <span className="text-sm font-bold">TRIGGER VOICE SCAN</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Hidden processing helper canvas */}

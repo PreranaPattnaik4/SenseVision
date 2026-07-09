@@ -5,7 +5,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 
 // Load environment variables
-dotenv.config();
+dotenv.config({ override: true });
 
 // Initialize Gemini Client
 // We use the recommended 'aistudio-build' User-Agent for telemetry
@@ -125,7 +125,7 @@ You must output a structured JSON response matching the provided schema.`;
 
       // Execute Gemini vision query
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-2.5-flash",
         contents: { parts: [imagePart, { text: userPrompt }] },
         config: {
           systemInstruction: completeSystemInstruction,

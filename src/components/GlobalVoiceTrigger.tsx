@@ -82,14 +82,18 @@ export default function GlobalVoiceTrigger({
     }
 
     if (isListening) {
-      recognition.stop();
+      try {
+        recognition.stop();
+      } catch (e) {
+        console.warn("Error stopping global recognition:", e);
+      }
     } else {
       cancelSpeech(); // stop any current speak first so it doesn't feed back
       setTimeout(() => {
         try {
           recognition.start();
         } catch (e) {
-          console.error(e);
+          console.error("Error starting global recognition:", e);
         }
       }, 150);
     }
@@ -99,119 +103,112 @@ export default function GlobalVoiceTrigger({
     const text = rawText.toLowerCase().trim();
     console.log("Parsed Global Voice Command: ", text);
 
-    // Help command
-    if (text.includes("help") || text.includes("what can i say") || text.includes("commands")) {
-      playChime('success');
-      setCommandFeedback("Opening voice help instructions.");
-      speakText("Voice guide. You can say navigation, read text, describe surroundings, or ask direct questions.", false);
-      setShowHelpModal(true);
-      return;
-    }
-
-    // Session Locking commands
-    if (text === "lock sensevision" || text === "goodbye" || text === "end session" || text === "exit" || text === "end conversation") {
-      playChime('alert');
-      setCommandFeedback("Locking SenseVision.");
-      if (onLockSession) {
-        onLockSession('disconnect');
+    // Define modular and extensible voice command routes for the Beta Voice Interface
+    const commands = [
+      {
+        intent: "Select Sense Sight Module",
+        match: (t: string) => t === "select sense sight module" || t === "sense sight module" || t.includes("select sense sight") || t.includes("sense sight module"),
+        action: () => {
+          onTabChange('scan');
+        },
+        confirmation: "Sense Sight module selected."
+      },
+      {
+        intent: "Trigger Voice Scan",
+        match: (t: string) => t === "trigger voice scan" || t === "voice scan" || t === "scan" || t === "capture" || t === "analyze" || t.includes("trigger voice scan"),
+        action: () => {
+          onTabChange('scan');
+          setTimeout(() => {
+            onTriggerScan();
+          }, 400);
+        },
+        confirmation: "Scanning surroundings now."
+      },
+      {
+        intent: "Open Auditory Logs",
+        match: (t: string) => t === "open auditory logs" || t === "auditory logs" || t.includes("auditory logs") || t.includes("open auditory"),
+        action: () => {
+          onTabChange('logs');
+        },
+        confirmation: "Opening Auditory Logs."
+      },
+      {
+        intent: "Accessibility Preferences",
+        match: (t: string) => t === "accessibility preferences" || t === "accessibility" || t === "preferences" || t.includes("accessibility preferences") || t.includes("a11y preferences"),
+        action: () => {
+          onTabChange('preferences');
+        },
+        confirmation: "Opening accessibility preferences."
+      },
+      {
+        intent: "Reset Camera",
+        match: (t: string) => t === "reset camera" || t.includes("reset camera"),
+        action: () => {
+          const btn = document.getElementById('reset-camera-btn');
+          if (btn) {
+            btn.click();
+          }
+        },
+        confirmation: "Camera reset. Returning to live feed."
+      },
+      {
+        intent: "Upload Image",
+        match: (t: string) => t === "upload image" || t.includes("upload image") || t.includes("browse files"),
+        action: () => {
+          const inputEl = document.getElementById('camera-file-input');
+          if (inputEl) {
+            inputEl.click();
+          }
+        },
+        confirmation: "Opening file browser to upload an image."
+      },
+      {
+        intent: "Speak Report",
+        match: (t: string) => t === "speak report" || t === "read report" || t.includes("speak report") || t.includes("read report"),
+        action: () => {
+          const btn = document.getElementById('speak-narrative-report-btn');
+          if (btn) {
+            // Speak report will run its own readout upon button click
+            btn.click();
+          } else {
+            speakText("No visual scan report is currently available to read aloud.", false);
+          }
+        },
+        confirmation: "Reading latest report aloud."
+      },
+      {
+        intent: "Stop / Mute",
+        match: (t: string) => t === "stop" || t === "mute" || t === "quiet" || t.includes("stop talking") || t.includes("shut up"),
+        action: () => {
+          onMuteSpeech();
+        },
+        confirmation: "Muted speech feedback."
+      },
+      {
+        intent: "Help",
+        match: (t: string) => t === "help" || t.includes("help") || t.includes("commands") || t.includes("what can i say"),
+        action: () => {
+          setShowHelpModal(true);
+        },
+        confirmation: "Voice Guide. You can say: Select Sense Sight Module, Trigger Voice Scan, Open Auditory Logs, Accessibility Preferences, Reset Camera, Upload Image, Speak Report, or Help."
       }
-      return;
-    }
+    ];
 
-    // Stop / Mute Command
-    if (text === "stop" || text === "mute" || text === "quiet" || text.includes("stop talking") || text.includes("shut up")) {
+    // Find matching command
+    const matched = commands.find(cmd => cmd.match(text));
+
+    if (matched) {
+      playChime('success');
+      setCommandFeedback(matched.confirmation);
+      speakText(matched.confirmation, false);
+      // Execute the associated programmatic action
+      matched.action();
+    } else {
+      // Unrecognized commands fallback exactly as requested
       playChime('alert');
-      setCommandFeedback("Muted voice feedback.");
-      onMuteSpeech();
-      return;
+      setCommandFeedback("Command not understood");
+      speakText("Sorry, I didn't understand. Say 'Help' to hear available commands.", false);
     }
-
-    // Capture / Scan Command
-    if (text === "scan" || text === "trigger" || text === "capture" || text === "analyze" || text === "scan surroundings" || text === "go") {
-      playChime('scan');
-      setCommandFeedback("Triggering live scan!");
-      speakText("Triggering scene scan now...", false);
-      onTabChange('scan');
-      setTimeout(() => {
-        onTriggerScan();
-      }, 800);
-      return;
-    }
-
-    // App Mode commands
-    if (text.includes("navigation") || text.includes("obstacle") || text.includes("path") || text.includes("hazard")) {
-      playChime('success');
-      setCommandFeedback("Switching to Navigation Mode.");
-      onTabChange('scan');
-      onModeChange(AppMode.NAVIGATION);
-      speakText("Switching to Navigation Assistance. Scanning for hazards. Speak 'Scan' to trigger.", false);
-      return;
-    }
-
-    if (text.includes("read") || text.includes("ocr") || text.includes("text") || text.includes("sign") || text.includes("book") || text.includes("document")) {
-      playChime('success');
-      setCommandFeedback("Switching to Text Reader Mode.");
-      onTabChange('scan');
-      onModeChange(AppMode.TEXT_READER);
-      speakText("Switching to Text Reader OCR mode. Point at letters. Speak 'Scan' to read.", false);
-      return;
-    }
-
-    if (text.includes("object") || text.includes("detect") || text.includes("item") || text.includes("recognize")) {
-      playChime('success');
-      setCommandFeedback("Switching to Object Detection.");
-      onTabChange('scan');
-      onModeChange(AppMode.OBJECT_RECOGNITION);
-      speakText("Switching to Object Detection mode. Speak 'Scan' to identify objects.", false);
-      return;
-    }
-
-    if (text.includes("describe") || text.includes("scene") || text.includes("surroundings") || text.includes("room") || text.includes("where am i")) {
-      playChime('success');
-      setCommandFeedback("Switching to Scene Description.");
-      onTabChange('scan');
-      onModeChange(AppMode.SCENE_DESCRIPTION);
-      speakText("Switching to complete Scene Description. Speak 'Scan' to describe surroundings.", false);
-      return;
-    }
-
-    if (text.includes("assistant") || text.includes("companion") || text.includes("chat") || text.includes("talk to")) {
-      playChime('success');
-      setCommandFeedback("Switching to Companion Assistant.");
-      onTabChange('scan');
-      onModeChange(AppMode.ASSISTANT);
-      speakText("Switching to Companion Assistant. Speak your question directly to ask.", false);
-      return;
-    }
-
-    // Tab changes
-    if (text.includes("history") || text.includes("log") || text.includes("logs")) {
-      playChime('success');
-      setCommandFeedback("Navigating to Auditory Logs.");
-      onTabChange('logs');
-      speakText("Opening historical visual logs.", false);
-      return;
-    }
-
-    if (text.includes("settings") || text.includes("preference") || text.includes("preferences") || text.includes("a11y")) {
-      playChime('success');
-      setCommandFeedback("Navigating to A11y Preferences.");
-      onTabChange('preferences');
-      speakText("Opening accessibility preferences.", false);
-      return;
-    }
-
-    // Fallback: If it's a general statement or question, automatically switch to Companion Assistant mode and query Gemini!
-    playChime('success');
-    setCommandFeedback(`Asking AI: "${rawText}"`);
-    onTabChange('scan');
-    onModeChange(AppMode.ASSISTANT);
-    speakText(`Asking companion assistant: ${rawText}`, false);
-    
-    // Trigger message dispatch to assistant stream
-    setTimeout(() => {
-      onSendAssistantMessage(rawText);
-    }, 1200);
   };
 
   return (
@@ -347,24 +344,24 @@ export default function GlobalVoiceTrigger({
               <div>
                 <h4 className="text-[11px] font-mono font-bold text-amber-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
                   <Eye className="w-3.5 h-3.5" />
-                  <span>Module Navigation Controls</span>
+                  <span>Module Navigation Commands</span>
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-850 text-xs">
-                    <span className="font-bold text-slate-200">"Describe surroundings"</span>
-                    <p className="text-[10px] text-slate-500 mt-0.5">Switch to Scene Narration mode</p>
+                  <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-850 text-xs text-left">
+                    <span className="font-bold text-slate-200">"Select Sense Sight Module"</span>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Switch to the main Scan & Sight tab</p>
                   </div>
-                  <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-850 text-xs">
-                    <span className="font-bold text-slate-200">"Navigation"</span>
-                    <p className="text-[10px] text-slate-500 mt-0.5">Switch to Obstacle Avoidance mode</p>
+                  <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-850 text-xs text-left">
+                    <span className="font-bold text-slate-200">"Open Auditory Logs"</span>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Navigate to your saved logs list</p>
                   </div>
-                  <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-850 text-xs">
-                    <span className="font-bold text-slate-200">"Read Text"</span>
-                    <p className="text-[10px] text-slate-500 mt-0.5">Switch to Text Reading OCR mode</p>
+                  <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-850 text-xs text-left">
+                    <span className="font-bold text-slate-200">"Accessibility Preferences"</span>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Open settings for voices and layout</p>
                   </div>
-                  <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-850 text-xs">
-                    <span className="font-bold text-slate-200">"Object detection"</span>
-                    <p className="text-[10px] text-slate-500 mt-0.5">Switch to Object recognition mode</p>
+                  <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-850 text-xs text-left">
+                    <span className="font-bold text-slate-200">"Help"</span>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Display this commands list</p>
                   </div>
                 </div>
               </div>
@@ -372,34 +369,29 @@ export default function GlobalVoiceTrigger({
               <div>
                 <h4 className="text-[11px] font-mono font-bold text-amber-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>Interactive Scan Commands</span>
+                  <span>Interactive Device Controls</span>
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-850 text-xs">
-                    <span className="font-bold text-slate-200">"Scan" / "Capture"</span>
-                    <p className="text-[10px] text-slate-500 mt-0.5">Triggers scan of active camera or uploaded photo</p>
+                  <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-850 text-xs text-left">
+                    <span className="font-bold text-slate-200">"Trigger Voice Scan"</span>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Capture a frame and start analysis</p>
                   </div>
-                  <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-850 text-xs">
+                  <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-850 text-xs text-left">
+                    <span className="font-bold text-slate-200">"Reset Camera"</span>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Reload stream or clear current photo</p>
+                  </div>
+                  <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-850 text-xs text-left">
+                    <span className="font-bold text-slate-200">"Upload Image"</span>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Open local file browser to choose photo</p>
+                  </div>
+                  <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-850 text-xs text-left">
+                    <span className="font-bold text-slate-200">"Speak Report"</span>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Re-read latest visual narrative summary</p>
+                  </div>
+                  <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-850 text-xs text-left col-span-1 sm:col-span-2">
                     <span className="font-bold text-slate-200">"Stop" / "Mute"</span>
-                    <p className="text-[10px] text-slate-500 mt-0.5">Stops ongoing speech narration immediately</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Silence ongoing speech synthesis immediately</p>
                   </div>
-                </div>
-              </div>
-
-              <div>
-                <h4 className="text-[11px] font-mono font-bold text-amber-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  <span>Direct Natural AI Queries</span>
-                </h4>
-                <div className="bg-slate-950 p-3 rounded-lg border border-slate-850 text-xs space-y-1.5">
-                  <p className="text-slate-300 font-medium">
-                    You can speak any direct question about your surroundings. SenseVision will immediately route your question to the Multimodal Gemini Assistant:
-                  </p>
-                  <ul className="list-disc pl-4 space-y-1 text-slate-400 font-mono text-[10px]">
-                    <li>"What is on the desk in front of me?"</li>
-                    <li>"Is there any hazard or wet floor?"</li>
-                    <li>"Read the medicine label on the bottle."</li>
-                  </ul>
                 </div>
               </div>
             </div>

@@ -80,10 +80,18 @@ export default function AssistantScreen({
     }
 
     if (isListening) {
-      recognition.stop();
+      try {
+        recognition.stop();
+      } catch (e) {
+        console.warn("Error stopping recognition:", e);
+      }
     } else {
       speakText("Listening now.", false);
-      recognition.start();
+      try {
+        recognition.start();
+      } catch (e) {
+        console.warn("Speech recognition already started:", e);
+      }
     }
   };
 

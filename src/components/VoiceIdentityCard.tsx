@@ -121,6 +121,8 @@ export default function VoiceIdentityCard({
   
   const authRecognitionRef = useRef<any>(null);
   const continuousRecognitionRef = useRef<any>(null);
+  const isAuthRecognitionRunningRef = useRef<boolean>(false);
+  const isContinuousListeningRunningRef = useRef<boolean>(false);
 
   const cleanupAuthTimersAndSpeech = () => {
     cancelSpeech();
@@ -133,6 +135,7 @@ export default function VoiceIdentityCard({
       countdownIntervalRef.current = null;
     }
     listeningSessionActiveRef.current = false;
+    isAuthRecognitionRunningRef.current = false;
     if (authRecognitionRef.current) {
       try {
         authRecognitionRef.current.stop();
@@ -151,6 +154,7 @@ export default function VoiceIdentityCard({
         rec.lang = 'en-US';
 
         rec.onstart = () => {
+          isAuthRecognitionRunningRef.current = true;
           setRecognizedText("");
         };
 
@@ -170,6 +174,7 @@ export default function VoiceIdentityCard({
         };
 
         rec.onerror = (e: any) => {
+          isAuthRecognitionRunningRef.current = false;
           console.warn("Auth voice recognition error:", e);
           if (e.error === 'not-allowed') {
             cleanupAuthTimersAndSpeech();
@@ -179,13 +184,18 @@ export default function VoiceIdentityCard({
         };
 
         rec.onend = () => {
+          isAuthRecognitionRunningRef.current = false;
           // If the listening session is still active and we haven't received a result, restart the mic
           if (listeningSessionActiveRef.current && !hasReceivedSpeechResultRef.current) {
             const elapsed = Date.now() - listeningSessionStartTimeRef.current;
             if (elapsed < 14000) {
               try {
-                rec.start();
+                if (!isAuthRecognitionRunningRef.current) {
+                  isAuthRecognitionRunningRef.current = true;
+                  rec.start();
+                }
               } catch (err) {
+                isAuthRecognitionRunningRef.current = false;
                 console.warn("Failed to restart SpeechRecognition during 15s session:", err);
               }
             }
@@ -345,10 +355,16 @@ export default function VoiceIdentityCard({
     listeningSessionStartTimeRef.current = Date.now();
     hasReceivedSpeechResultRef.current = false;
 
-    try {
-      authRecognitionRef.current.start();
-    } catch (e) {
-      console.error("Error starting speech recognition:", e);
+    if (!isAuthRecognitionRunningRef.current) {
+      try {
+        isAuthRecognitionRunningRef.current = true;
+        authRecognitionRef.current.start();
+      } catch (e) {
+        isAuthRecognitionRunningRef.current = false;
+        console.error("Error starting speech recognition:", e);
+      }
+    } else {
+      console.log("Auth speech recognition is already running. Skipping duplicate start.");
     }
 
     // Keep the microphone active for 15 seconds to allow the user to speak comfortably.
@@ -454,7 +470,7 @@ export default function VoiceIdentityCard({
 
   // Start continuous voice listening loop
   const startContinuousListening = () => {
-    if (isContinuousListening) return;
+    if (isContinuousListeningRunningRef.current) return;
 
     if (typeof window !== 'undefined') {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -466,6 +482,7 @@ export default function VoiceIdentityCard({
 
         rec.onstart = () => {
           setIsContinuousListening(true);
+          isContinuousListeningRunningRef.current = true;
         };
 
         rec.onresult = (event: any) => {
@@ -478,6 +495,7 @@ export default function VoiceIdentityCard({
         rec.onerror = (e: any) => {
           console.warn("Continuous voice loop error:", e);
           setIsContinuousListening(false);
+          isContinuousListeningRunningRef.current = false;
           setTimeout(() => {
             if (companionActive && !isPaused && !isGeminiAnalyzing && !isGeminiSpeaking) {
               startContinuousListening();
@@ -487,6 +505,7 @@ export default function VoiceIdentityCard({
 
         rec.onend = () => {
           setIsContinuousListening(false);
+          isContinuousListeningRunningRef.current = false;
           setTimeout(() => {
             if (companionActive && !isPaused && !isGeminiAnalyzing && !isGeminiSpeaking) {
               startContinuousListening();
@@ -500,8 +519,10 @@ export default function VoiceIdentityCard({
 
     if (continuousRecognitionRef.current) {
       try {
+        isContinuousListeningRunningRef.current = true;
         continuousRecognitionRef.current.start();
       } catch (err) {
+        isContinuousListeningRunningRef.current = false;
         // Already started
       }
     }
@@ -509,13 +530,14 @@ export default function VoiceIdentityCard({
 
   // Stop continuous listening
   const stopContinuousListening = () => {
-    if (continuousRecognitionRef.current && isContinuousListening) {
+    if (continuousRecognitionRef.current && (isContinuousListening || isContinuousListeningRunningRef.current)) {
       try {
         continuousRecognitionRef.current.stop();
       } catch (err) {
         console.error(err);
       }
       setIsContinuousListening(false);
+      isContinuousListeningRunningRef.current = false;
     }
   };
 
